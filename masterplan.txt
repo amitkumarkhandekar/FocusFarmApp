@@ -1,0 +1,340 @@
+📘 masterplan.md — FocusFarm
+1. App Overview & Objectives
+
+FocusFarm is a mobile productivity app for students that helps them build consistent study habits through a playful, game-like farming experience.
+
+Instead of growing trees (like Forest), users rear animals by completing focus goals. Over time, they build an infinite farm that visually represents their discipline, effort, and progress.
+
+Primary Objectives
+
+Make studying feel fun and emotionally rewarding
+
+Encourage daily consistency without guilt or punishment
+
+Provide a strong solo experience first, with a clear path to social features
+
+Offer a student-friendly monetization model without paywalls
+
+2. Target Audience
+Primary (MVP)
+
+School, college, and competitive exam students
+
+Age: ~15–25
+
+Study-heavy routines, often alone
+
+Motivated by:
+
+Visual progress
+
+Emotional feedback
+
+Light gamification
+
+Secondary (Future)
+
+College groups
+
+Online study communities
+
+Young professionals (with UI tweaks)
+
+3. Core Product Philosophy
+
+Kind, not strict — missed goals don’t punish harshly
+
+Playful, not childish — game-like but respectful
+
+Commitment-based — users promise time to themselves
+
+Progress > perfection
+
+Designed from day one for future social expansion
+
+4. Core Features & Functionality
+4.1 Focus Sessions
+
+User-defined (flexible duration)
+
+Pause allowed
+
+Session continues even if app is closed
+
+Other apps are blocked during an active session
+
+Session must be manually stopped inside FocusFarm
+
+Intent:
+Create a focused “study mode” that feels serious but fair.
+
+4.2 Goal System (Tier-Based)
+
+Users work through tier-based goals:
+
+Daily
+
+Weekly
+
+Monthly
+
+Each tier represents increasing commitment and unlocks rewards.
+
+Why tiers work well:
+
+Clear progression
+
+Game-like structure
+
+Avoids overwhelm
+
+Encourages realistic expectations for students
+
+4.3 Animal-Based Reward System
+
+Animals are unlocked by completing goal tiers
+
+No evolution in MVP (distinct animals only)
+
+Initial animals:
+
+Hen
+
+Goat
+
+Cow
+
+Each unlocked animal is added permanently to the user’s farm
+
+Farm size is infinite
+
+Emotional loop:
+
+“My studying built this.”
+
+4.4 Farm View
+
+Visual representation of progress
+
+Animals accumulate over time
+
+Calm but playful animations
+
+Serves as a long-term motivation anchor
+
+5. Monetization Strategy
+Model: Free Core + Cosmetic Premium
+
+Always free:
+
+Focus sessions
+
+Goal tracking
+
+Animal unlocking
+
+Farm growth
+
+Premium (cosmetic only):
+
+Animal skins
+
+Farm / land themes
+
+Visual customizations
+
+(Future) social badges or aura effects
+
+Principle:
+
+Never charge users for being productive.
+
+6. Platform Strategy
+MVP
+
+Mobile-first
+
+iOS + Android
+
+Reasoning
+
+Students primarily study with phones nearby
+
+Blocking distractions is mobile-native
+
+Social features fit naturally on mobile
+
+7. Authentication & Data Strategy (Conceptual)
+
+Mandatory login
+
+Cloud-backed data storage (Supabase)
+
+Enables:
+
+Cross-device sync
+
+Data safety
+
+Future social mechanics (friends, rooms, shared rewards)
+
+UX principle:
+Login should feel lightweight and justified by value.
+
+8. High-Level Technical Stack (Conceptual)
+
+No implementation details — just direction.
+
+Backend
+
+Managed backend with authentication + database
+
+Real-time capable (for future social features)
+
+Recommended direction: Supabase
+Why: Simple, scalable, social-ready, low overhead
+
+Data Considerations
+
+User profiles
+
+Focus session logs
+
+Goal progress
+
+Animal inventory
+
+Farm state
+
+Designed as if social is coming, even if unused in MVP.
+
+9. Conceptual Data Model (High-Level)
+
+User
+
+Account info
+
+Preferences
+
+Tier level
+
+Focus Session
+
+Duration
+
+Status
+
+Timestamp
+
+Goal
+
+Type (daily / weekly / monthly)
+
+Tier
+
+Completion state
+
+Animal
+
+Type
+
+Unlock source
+
+Cosmetic attributes
+
+Farm
+
+Collection of animals
+
+Visual configuration
+
+10. UI / UX Design Principles
+Vibe
+
+Playful & game-like
+
+Encouraging
+
+Emotionally positive
+
+Design Guidelines
+
+Clear visual feedback for progress
+
+Friendly copy (“You did great today”)
+
+Soft failure states (sad, not dead animals)
+
+Smooth animations that reward effort
+
+Strong day/night mode support (important for students)
+
+11. Security & Trust Considerations
+
+Secure authentication
+
+Data integrity for focus sessions (important for future social)
+
+Anti-cheat thinking baked in conceptually
+
+Clear permission explanations (especially for app blocking)
+
+12. Development Phases / Milestones
+Phase 1 — MVP (Solo)
+
+Login
+
+Focus sessions
+
+Tier-based goals
+
+Animal unlocking
+
+Infinite farm
+
+Core UI polish
+
+Phase 2 — Light Social
+
+See friends’ farms
+
+Emoji / heart encouragement
+
+Presence indicators
+
+Phase 3 — Deep Social
+
+Focus rooms
+
+Group sessions
+
+Shared rewards
+
+Community-driven motivation
+
+13. Potential Challenges & Conceptual Solutions
+Challenge: Students quitting after missed goals
+
+Solution: Soft failure, tier flexibility, encouragement
+
+Challenge: App feeling gimmicky
+
+Solution: Balance playfulness with seriousness in copy & visuals
+
+Challenge: Social toxicity (future)
+
+Solution: Emoji-first interactions, no public shaming metrics
+
+14. Future Expansion Possibilities
+
+Land acquisition & customization
+
+Seasonal events
+
+Limited-time animals
+
+Study streak narratives
+
+Campus-based communities
+
+Offline-first optimizations
