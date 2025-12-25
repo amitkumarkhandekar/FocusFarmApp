@@ -1,516 +1,527 @@
-import React, { Suspense, useRef, useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, PanResponder, TouchableOpacity } from 'react-native';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, PanResponder, TouchableOpacity, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Canvas, useFrame, useThree } from '@react-three/fiber/native';
+import { GLView } from 'expo-gl';
+import { Renderer } from 'expo-three';
 import * as THREE from 'three';
 import { useRouter } from 'expo-router';
-import { Play, ZoomIn, ZoomOut, Sparkles, Sun, Moon, X } from 'lucide-react-native';
+import { Play, ZoomIn, ZoomOut, Sparkles, Sun, Moon, X, Volume2, VolumeX } from 'lucide-react-native';
 import { useFarm } from '../../context/FarmContext';
 import { useTheme } from '../../context/ThemeContext';
 
 // ============================================
-// REALISTIC COW
+// CREATE COW - Realistic with spots
 // ============================================
-function RealisticCow({ position, rotation = 0 }: { position: [number, number, number]; rotation?: number }) {
-    const groupRef = useRef<THREE.Group>(null);
-    const [targetPos, setTargetPos] = useState(position);
-    const currentPos = useRef(new THREE.Vector3(...position));
-    const currentRot = useRef(rotation);
-    const userData = useRef({ grazingTime: 0, isGrazing: Math.random() > 0.5 });
+function createCow(): THREE.Group {
+    const cow = new THREE.Group();
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            if (Math.random() > 0.5 && !userData.current.isGrazing) {
-                const newX = Math.max(-25, Math.min(25, currentPos.current.x + (Math.random() - 0.5) * 8));
-                const newZ = Math.max(-25, Math.min(25, currentPos.current.z + (Math.random() - 0.5) * 8));
-                setTargetPos([newX, 0, newZ]);
-            }
-        }, 5000 + Math.random() * 4000);
-        return () => clearInterval(interval);
-    }, []);
+    // Body
+    const bodyGeometry = new THREE.BoxGeometry(2, 1.8, 4);
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 });
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    body.position.y = 2;
+    body.castShadow = true;
+    body.receiveShadow = true;
+    cow.add(body);
 
-    useFrame((state) => {
-        if (groupRef.current) {
-            const target = new THREE.Vector3(targetPos[0], 0, targetPos[2]);
-            currentPos.current.lerp(target, 0.008);
-            groupRef.current.position.copy(currentPos.current);
-            const dir = target.clone().sub(currentPos.current);
-            if (dir.length() > 0.1) {
-                const targetRot = Math.atan2(dir.x, dir.z);
-                currentRot.current = THREE.MathUtils.lerp(currentRot.current, targetRot, 0.02);
-                groupRef.current.rotation.y = currentRot.current;
-            }
-            // Subtle breathing/movement
-            groupRef.current.position.y = Math.sin(state.clock.elapsedTime * 1.5) * 0.02;
-        }
+    // Spots
+    const spotMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+    const spots = [
+        { pos: [0.5, 2.5, 1], size: [0.6, 0.5, 0.3] },
+        { pos: [-0.7, 2.3, -0.5], size: [0.8, 0.6, 0.3] },
+        { pos: [0.3, 2.1, -1.5], size: [0.5, 0.4, 0.3] }
+    ];
+    spots.forEach(spot => {
+        const spotGeo = new THREE.BoxGeometry(spot.size[0], spot.size[1], spot.size[2]);
+        const spotMesh = new THREE.Mesh(spotGeo, spotMaterial);
+        spotMesh.position.set(spot.pos[0], spot.pos[1], spot.pos[2]);
+        spotMesh.castShadow = true;
+        cow.add(spotMesh);
     });
 
-    return (
-        <group ref={groupRef} position={position} rotation={[0, rotation, 0]} scale={0.9}>
-            {/* Body */}
-            <mesh position={[0, 1.2, 0]} castShadow>
-                <boxGeometry args={[1.2, 1.1, 2.4]} />
-                <meshStandardMaterial color="#FAFAFA" />
-            </mesh>
-            {/* Spots */}
-            <mesh position={[0.3, 1.5, 0.6]}><sphereGeometry args={[0.35, 8, 8]} /><meshStandardMaterial color="#1A1A1A" /></mesh>
-            <mesh position={[-0.4, 1.4, -0.3]}><sphereGeometry args={[0.45, 8, 8]} /><meshStandardMaterial color="#1A1A1A" /></mesh>
-            <mesh position={[0.2, 1.3, -0.9]}><sphereGeometry args={[0.3, 8, 8]} /><meshStandardMaterial color="#1A1A1A" /></mesh>
-            {/* Head */}
-            <mesh position={[0, 1.5, 1.4]} castShadow><boxGeometry args={[0.7, 0.7, 0.9]} /><meshStandardMaterial color="#FAFAFA" /></mesh>
-            {/* Snout */}
-            <mesh position={[0, 1.3, 1.8]} castShadow><boxGeometry args={[0.5, 0.4, 0.25]} /><meshStandardMaterial color="#FFCCBB" /></mesh>
-            {/* Horns */}
-            <mesh position={[0.25, 2, 1.5]} rotation={[0, 0, 0.3]} castShadow><boxGeometry args={[0.08, 0.35, 0.08]} /><meshStandardMaterial color="#4A4A4A" /></mesh>
-            <mesh position={[-0.25, 2, 1.5]} rotation={[0, 0, -0.3]} castShadow><boxGeometry args={[0.08, 0.35, 0.08]} /><meshStandardMaterial color="#4A4A4A" /></mesh>
-            {/* Ears */}
-            <mesh position={[0.35, 1.8, 1.2]} castShadow><boxGeometry args={[0.18, 0.3, 0.12]} /><meshStandardMaterial color="#FAFAFA" /></mesh>
-            <mesh position={[-0.35, 1.8, 1.2]} castShadow><boxGeometry args={[0.18, 0.3, 0.12]} /><meshStandardMaterial color="#FAFAFA" /></mesh>
-            {/* Legs */}
-            <mesh position={[0.35, 0.55, 0.7]} castShadow><boxGeometry args={[0.25, 1.1, 0.25]} /><meshStandardMaterial color="#FAFAFA" /></mesh>
-            <mesh position={[-0.35, 0.55, 0.7]} castShadow><boxGeometry args={[0.25, 1.1, 0.25]} /><meshStandardMaterial color="#FAFAFA" /></mesh>
-            <mesh position={[0.35, 0.55, -0.7]} castShadow><boxGeometry args={[0.25, 1.1, 0.25]} /><meshStandardMaterial color="#1A1A1A" /></mesh>
-            <mesh position={[-0.35, 0.55, -0.7]} castShadow><boxGeometry args={[0.25, 1.1, 0.25]} /><meshStandardMaterial color="#1A1A1A" /></mesh>
-            {/* Tail */}
-            <mesh position={[0.6, 0.9, -1.2]} rotation={[0, 0, 0.3]} castShadow><boxGeometry args={[0.06, 0.9, 0.06]} /><meshStandardMaterial color="#FAFAFA" /></mesh>
-        </group>
-    );
-}
+    // Head
+    const headGeometry = new THREE.BoxGeometry(1.2, 1.2, 1.5);
+    const head = new THREE.Mesh(headGeometry, bodyMaterial);
+    head.position.set(0, 2.5, 2.3);
+    head.castShadow = true;
+    head.name = 'head';
+    cow.add(head);
 
-// ============================================
-// REALISTIC GOAT
-// ============================================
-function RealisticGoat({ position, rotation = 0 }: { position: [number, number, number]; rotation?: number }) {
-    const groupRef = useRef<THREE.Group>(null);
-    const [targetPos, setTargetPos] = useState(position);
-    const currentPos = useRef(new THREE.Vector3(...position));
-    const currentRot = useRef(rotation);
+    // Snout
+    const snoutGeometry = new THREE.BoxGeometry(0.8, 0.6, 0.4);
+    const snoutMaterial = new THREE.MeshStandardMaterial({ color: 0xffccbb });
+    const snout = new THREE.Mesh(snoutGeometry, snoutMaterial);
+    snout.position.set(0, 2.2, 3);
+    cow.add(snout);
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            if (Math.random() > 0.4) {
-                const newX = Math.max(-25, Math.min(25, currentPos.current.x + (Math.random() - 0.5) * 6));
-                const newZ = Math.max(-25, Math.min(25, currentPos.current.z + (Math.random() - 0.5) * 6));
-                setTargetPos([newX, 0, newZ]);
-            }
-        }, 4000 + Math.random() * 3000);
-        return () => clearInterval(interval);
-    }, []);
+    // Horns
+    const hornGeometry = new THREE.BoxGeometry(0.15, 0.6, 0.15);
+    const hornMaterial = new THREE.MeshStandardMaterial({ color: 0x4a4a4a });
+    const horn1 = new THREE.Mesh(hornGeometry, hornMaterial);
+    horn1.position.set(0.4, 3.3, 2.5);
+    horn1.rotation.z = 0.3;
+    cow.add(horn1);
+    const horn2 = horn1.clone();
+    horn2.position.x = -0.4;
+    horn2.rotation.z = -0.3;
+    cow.add(horn2);
 
-    useFrame((state) => {
-        if (groupRef.current) {
-            const target = new THREE.Vector3(targetPos[0], 0, targetPos[2]);
-            currentPos.current.lerp(target, 0.012);
-            groupRef.current.position.copy(currentPos.current);
-            const dir = target.clone().sub(currentPos.current);
-            if (dir.length() > 0.1) {
-                const targetRot = Math.atan2(dir.x, dir.z);
-                currentRot.current = THREE.MathUtils.lerp(currentRot.current, targetRot, 0.025);
-                groupRef.current.rotation.y = currentRot.current;
-            }
-            groupRef.current.position.y = Math.sin(state.clock.elapsedTime * 2) * 0.015;
-        }
+    // Ears
+    const earGeometry = new THREE.BoxGeometry(0.3, 0.5, 0.2);
+    const ear1 = new THREE.Mesh(earGeometry, bodyMaterial);
+    ear1.position.set(0.5, 3, 2);
+    cow.add(ear1);
+    const ear2 = ear1.clone();
+    ear2.position.x = -0.5;
+    cow.add(ear2);
+
+    // Legs
+    const legGeometry = new THREE.BoxGeometry(0.4, 1.8, 0.4);
+    const legPositions = [[-0.6, 0.9, 1.2], [0.6, 0.9, 1.2], [-0.6, 0.9, -1.2], [0.6, 0.9, -1.2]];
+    legPositions.forEach((pos, idx) => {
+        const leg = new THREE.Mesh(legGeometry, bodyMaterial);
+        leg.position.set(pos[0], pos[1], pos[2]);
+        leg.castShadow = true;
+        leg.name = `leg${idx}`;
+        cow.add(leg);
     });
 
-    return (
-        <group ref={groupRef} position={position} rotation={[0, rotation, 0]} scale={0.8}>
-            {/* Body */}
-            <mesh position={[0, 0.9, 0]} castShadow><boxGeometry args={[0.75, 0.85, 1.5]} /><meshStandardMaterial color="#B8956A" /></mesh>
-            {/* Head */}
-            <mesh position={[0, 1.35, 0.9]} castShadow><boxGeometry args={[0.55, 0.55, 0.6]} /><meshStandardMaterial color="#B8956A" /></mesh>
-            {/* Beard */}
-            <mesh position={[0, 1.1, 1.2]} castShadow><boxGeometry args={[0.4, 0.25, 0.12]} /><meshStandardMaterial color="#B8956A" /></mesh>
-            {/* Horns */}
-            <mesh position={[0.2, 1.7, 0.8]} rotation={[0, 0, 0.4]} castShadow><boxGeometry args={[0.08, 0.5, 0.08]} /><meshStandardMaterial color="#3A3A3A" /></mesh>
-            <mesh position={[-0.2, 1.7, 0.8]} rotation={[0, 0, -0.4]} castShadow><boxGeometry args={[0.08, 0.5, 0.08]} /><meshStandardMaterial color="#3A3A3A" /></mesh>
-            {/* Ears */}
-            <mesh position={[0.3, 1.55, 0.9]} castShadow><boxGeometry args={[0.15, 0.25, 0.1]} /><meshStandardMaterial color="#B8956A" /></mesh>
-            <mesh position={[-0.3, 1.55, 0.9]} castShadow><boxGeometry args={[0.15, 0.25, 0.1]} /><meshStandardMaterial color="#B8956A" /></mesh>
-            {/* Legs */}
-            <mesh position={[0.22, 0.43, 0.5]} castShadow><boxGeometry args={[0.16, 0.85, 0.16]} /><meshStandardMaterial color="#8D6E63" /></mesh>
-            <mesh position={[-0.22, 0.43, 0.5]} castShadow><boxGeometry args={[0.16, 0.85, 0.16]} /><meshStandardMaterial color="#8D6E63" /></mesh>
-            <mesh position={[0.22, 0.43, -0.5]} castShadow><boxGeometry args={[0.16, 0.85, 0.16]} /><meshStandardMaterial color="#8D6E63" /></mesh>
-            <mesh position={[-0.22, 0.43, -0.5]} castShadow><boxGeometry args={[0.16, 0.85, 0.16]} /><meshStandardMaterial color="#8D6E63" /></mesh>
-            {/* Tail */}
-            <mesh position={[0.4, 0.75, -0.75]} castShadow><boxGeometry args={[0.06, 0.4, 0.06]} /><meshStandardMaterial color="#B8956A" /></mesh>
-        </group>
-    );
+    // Tail
+    const tailGeometry = new THREE.BoxGeometry(0.1, 1.5, 0.1);
+    const tail = new THREE.Mesh(tailGeometry, bodyMaterial);
+    tail.position.set(1, 1.5, -2);
+    tail.rotation.z = 0.3;
+    tail.name = 'tail';
+    cow.add(tail);
+
+    return cow;
 }
 
 // ============================================
-// REALISTIC HEN
+// CREATE GOAT - Brown with beard and horns
 // ============================================
-function RealisticHen({ position, rotation = 0 }: { position: [number, number, number]; rotation?: number }) {
-    const groupRef = useRef<THREE.Group>(null);
-    const [targetPos, setTargetPos] = useState(position);
-    const currentPos = useRef(new THREE.Vector3(...position));
-    const currentRot = useRef(rotation);
+function createGoat(): THREE.Group {
+    const goat = new THREE.Group();
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            if (Math.random() > 0.3) {
-                const newX = Math.max(-25, Math.min(25, currentPos.current.x + (Math.random() - 0.5) * 4));
-                const newZ = Math.max(-25, Math.min(25, currentPos.current.z + (Math.random() - 0.5) * 4));
-                setTargetPos([newX, 0, newZ]);
-            }
-        }, 2500 + Math.random() * 2000);
-        return () => clearInterval(interval);
-    }, []);
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xb8956a, roughness: 0.8 });
 
-    useFrame((state) => {
-        if (groupRef.current) {
-            const target = new THREE.Vector3(targetPos[0], 0, targetPos[2]);
-            currentPos.current.lerp(target, 0.018);
-            groupRef.current.position.copy(currentPos.current);
-            const dir = target.clone().sub(currentPos.current);
-            if (dir.length() > 0.05) {
-                const targetRot = Math.atan2(dir.x, dir.z);
-                currentRot.current = THREE.MathUtils.lerp(currentRot.current, targetRot, 0.035);
-                groupRef.current.rotation.y = currentRot.current;
-            }
-            groupRef.current.position.y = Math.sin(state.clock.elapsedTime * 6) * 0.01;
-        }
+    // Body
+    const bodyGeometry = new THREE.BoxGeometry(1.2, 1.4, 2.5);
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    body.position.y = 1.5;
+    body.castShadow = true;
+    goat.add(body);
+
+    // Head
+    const headGeometry = new THREE.BoxGeometry(0.9, 0.9, 1);
+    const head = new THREE.Mesh(headGeometry, bodyMaterial);
+    head.position.set(0, 2.2, 1.5);
+    head.castShadow = true;
+    head.name = 'head';
+    goat.add(head);
+
+    // Beard
+    const beardGeometry = new THREE.BoxGeometry(0.7, 0.4, 0.2);
+    const beard = new THREE.Mesh(beardGeometry, bodyMaterial);
+    beard.position.set(0, 1.8, 2);
+    goat.add(beard);
+
+    // Horns
+    const hornGeometry = new THREE.BoxGeometry(0.12, 0.8, 0.12);
+    const hornMaterial = new THREE.MeshStandardMaterial({ color: 0x3a3a3a });
+    const horn1 = new THREE.Mesh(hornGeometry, hornMaterial);
+    horn1.position.set(0.3, 2.8, 1.3);
+    horn1.rotation.z = 0.4;
+    goat.add(horn1);
+    const horn2 = horn1.clone();
+    horn2.position.x = -0.3;
+    horn2.rotation.z = -0.4;
+    goat.add(horn2);
+
+    // Ears
+    const earGeometry = new THREE.BoxGeometry(0.25, 0.4, 0.15);
+    const ear1 = new THREE.Mesh(earGeometry, bodyMaterial);
+    ear1.position.set(0.4, 2.6, 1.5);
+    goat.add(ear1);
+    const ear2 = ear1.clone();
+    ear2.position.x = -0.4;
+    goat.add(ear2);
+
+    // Legs
+    const legGeometry = new THREE.BoxGeometry(0.25, 1.4, 0.25);
+    const legPositions = [[-0.35, 0.7, 0.8], [0.35, 0.7, 0.8], [-0.35, 0.7, -0.8], [0.35, 0.7, -0.8]];
+    legPositions.forEach((pos, idx) => {
+        const leg = new THREE.Mesh(legGeometry, bodyMaterial);
+        leg.position.set(pos[0], pos[1], pos[2]);
+        leg.castShadow = true;
+        leg.name = `leg${idx}`;
+        goat.add(leg);
     });
 
-    return (
-        <group ref={groupRef} position={position} rotation={[0, rotation, 0]} scale={0.65}>
-            {/* Body */}
-            <mesh position={[0, 0.45, 0]} castShadow><sphereGeometry args={[0.32, 12, 12]} /><meshStandardMaterial color="#DC4C2C" /></mesh>
-            {/* Head */}
-            <mesh position={[0, 0.85, 0.3]} castShadow><sphereGeometry args={[0.16, 10, 10]} /><meshStandardMaterial color="#DC4C2C" /></mesh>
-            {/* Comb */}
-            <mesh position={[0, 1.05, 0.27]} castShadow><boxGeometry args={[0.1, 0.22, 0.08]} /><meshStandardMaterial color="#FF0000" /></mesh>
-            {/* Beak */}
-            <mesh position={[0, 0.8, 0.45]} castShadow><boxGeometry args={[0.08, 0.08, 0.12]} /><meshStandardMaterial color="#FFAA00" /></mesh>
-            {/* Wattle */}
-            <mesh position={[0, 0.65, 0.27]} castShadow><boxGeometry args={[0.06, 0.08, 0.04]} /><meshStandardMaterial color="#FF0000" /></mesh>
-            {/* Legs */}
-            <mesh position={[-0.12, 0.15, 0]} castShadow><boxGeometry args={[0.06, 0.35, 0.06]} /><meshStandardMaterial color="#FFAA00" /></mesh>
-            <mesh position={[0.12, 0.15, 0]} castShadow><boxGeometry args={[0.06, 0.35, 0.06]} /><meshStandardMaterial color="#FFAA00" /></mesh>
-            {/* Tail */}
-            <mesh position={[0, 0.6, -0.3]} rotation={[0, 0, 0.3]} castShadow><boxGeometry args={[0.08, 0.3, 0.15]} /><meshStandardMaterial color="#424242" /></mesh>
-            {/* Wing */}
-            <mesh position={[0.27, 0.52, 0.07]} castShadow><boxGeometry args={[0.08, 0.22, 0.22]} /><meshStandardMaterial color="#DC4C2C" /></mesh>
-        </group>
-    );
+    // Tail
+    const tailGeometry = new THREE.BoxGeometry(0.1, 0.6, 0.1);
+    const tail = new THREE.Mesh(tailGeometry, bodyMaterial);
+    tail.position.set(0.6, 1.2, -1.2);
+    tail.name = 'tail';
+    goat.add(tail);
+
+    return goat;
 }
 
 // ============================================
-// CARETAKER (FARMER)
+// CREATE HEN - Red with comb and wattle
 // ============================================
-function Caretaker({ position }: { position: [number, number, number] }) {
-    const groupRef = useRef<THREE.Group>(null);
-    const [targetPos, setTargetPos] = useState(position);
-    const currentPos = useRef(new THREE.Vector3(...position));
-    const currentRot = useRef(0);
+function createHen(): THREE.Group {
+    const hen = new THREE.Group();
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            if (Math.random() > 0.3) {
-                const newX = Math.max(-25, Math.min(25, currentPos.current.x + (Math.random() - 0.5) * 10));
-                const newZ = Math.max(-25, Math.min(25, currentPos.current.z + (Math.random() - 0.5) * 10));
-                setTargetPos([newX, 0, newZ]);
-            }
-        }, 6000 + Math.random() * 4000);
-        return () => clearInterval(interval);
-    }, []);
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xdc4c2c, roughness: 0.7 });
 
-    useFrame((state) => {
-        if (groupRef.current) {
-            const target = new THREE.Vector3(targetPos[0], 0, targetPos[2]);
-            currentPos.current.lerp(target, 0.006);
-            groupRef.current.position.copy(currentPos.current);
-            const dir = target.clone().sub(currentPos.current);
-            if (dir.length() > 0.1) {
-                const targetRot = Math.atan2(dir.x, dir.z);
-                currentRot.current = THREE.MathUtils.lerp(currentRot.current, targetRot, 0.02);
-                groupRef.current.rotation.y = currentRot.current;
-            }
-        }
+    // Body
+    const bodyGeometry = new THREE.SphereGeometry(0.35, 16, 16);
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    body.position.y = 0.6;
+    body.scale.set(1, 1.2, 1.3);
+    body.castShadow = true;
+    hen.add(body);
+
+    // Head
+    const headGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+    const head = new THREE.Mesh(headGeometry, bodyMaterial);
+    head.position.set(0, 1.1, 0.4);
+    head.castShadow = true;
+    head.name = 'head';
+    hen.add(head);
+
+    // Comb
+    const combGeometry = new THREE.BoxGeometry(0.15, 0.3, 0.1);
+    const combMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+    const comb = new THREE.Mesh(combGeometry, combMaterial);
+    comb.position.set(0, 1.35, 0.35);
+    hen.add(comb);
+
+    // Beak
+    const beakGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.15);
+    const beakMaterial = new THREE.MeshStandardMaterial({ color: 0xffaa00 });
+    const beak = new THREE.Mesh(beakGeometry, beakMaterial);
+    beak.position.set(0, 1.05, 0.55);
+    hen.add(beak);
+
+    // Wattle
+    const wattleGeometry = new THREE.BoxGeometry(0.08, 0.1, 0.05);
+    const wattle = new THREE.Mesh(wattleGeometry, combMaterial);
+    wattle.position.set(0, 0.85, 0.35);
+    hen.add(wattle);
+
+    // Legs
+    const legGeometry = new THREE.BoxGeometry(0.08, 0.5, 0.08);
+    const legMaterial = new THREE.MeshStandardMaterial({ color: 0xffaa00 });
+    const leg1 = new THREE.Mesh(legGeometry, legMaterial);
+    leg1.position.set(-0.15, 0.2, 0);
+    leg1.name = 'leg0';
+    hen.add(leg1);
+    const leg2 = leg1.clone();
+    leg2.position.x = 0.15;
+    leg2.name = 'leg1';
+    hen.add(leg2);
+
+    // Tail
+    const tailGeometry = new THREE.BoxGeometry(0.1, 0.4, 0.2);
+    const tail = new THREE.Mesh(tailGeometry, bodyMaterial);
+    tail.position.set(0, 0.8, -0.4);
+    tail.rotation.z = 0.3;
+    tail.name = 'tail';
+    hen.add(tail);
+
+    // Wing
+    const wingGeometry = new THREE.BoxGeometry(0.1, 0.3, 0.3);
+    const wing = new THREE.Mesh(wingGeometry, bodyMaterial);
+    wing.position.set(0.35, 0.7, 0.1);
+    hen.add(wing);
+
+    return hen;
+}
+
+// ============================================
+// CREATE CARETAKER (FARMER) - Larger size
+// ============================================
+function createCaretaker(): THREE.Group {
+    const caretaker = new THREE.Group();
+
+    // Body (shirt)
+    const bodyGeometry = new THREE.BoxGeometry(1.5, 2.5, 0.9);
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.7 });
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    body.position.y = 1.5;
+    body.castShadow = true;
+    body.name = 'body';
+    caretaker.add(body);
+
+    // Head
+    const headGeometry = new THREE.SphereGeometry(0.4, 16, 16);
+    const headMaterial = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.6 });
+    const head = new THREE.Mesh(headGeometry, headMaterial);
+    head.position.set(0, 3, 0);
+    head.castShadow = true;
+    head.name = 'head';
+    caretaker.add(head);
+
+    // Hat
+    const hatGeometry = new THREE.ConeGeometry(0.55, 0.6, 16);
+    const hatMaterial = new THREE.MeshStandardMaterial({ color: 0x654321 });
+    const hat = new THREE.Mesh(hatGeometry, hatMaterial);
+    hat.position.set(0, 3.6, 0);
+    caretaker.add(hat);
+
+    // Arms
+    const armGeometry = new THREE.BoxGeometry(0.35, 1.5, 0.35);
+    const armMaterial = new THREE.MeshStandardMaterial({ color: 0xffdbac });
+    const leftArm = new THREE.Mesh(armGeometry, armMaterial);
+    leftArm.position.set(-0.9, 2, 0);
+    leftArm.castShadow = true;
+    leftArm.name = 'leftArm';
+    caretaker.add(leftArm);
+    const rightArm = new THREE.Mesh(armGeometry, armMaterial);
+    rightArm.position.set(0.9, 2, 0);
+    rightArm.castShadow = true;
+    rightArm.name = 'rightArm';
+    caretaker.add(rightArm);
+
+    // Legs
+    const legGeometry = new THREE.BoxGeometry(0.35, 1.3, 0.35);
+    const legMaterial = new THREE.MeshStandardMaterial({ color: 0x2c2c2c });
+    const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
+    leftLeg.position.set(-0.35, 0.65, 0);
+    leftLeg.castShadow = true;
+    leftLeg.name = 'leftLeg';
+    caretaker.add(leftLeg);
+    const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
+    rightLeg.position.set(0.35, 0.65, 0);
+    rightLeg.castShadow = true;
+    rightLeg.name = 'rightLeg';
+    caretaker.add(rightLeg);
+
+    // Shoes
+    const shoeGeometry = new THREE.BoxGeometry(0.4, 0.3, 0.5);
+    const shoeMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
+    const leftShoe = new THREE.Mesh(shoeGeometry, shoeMaterial);
+    leftShoe.position.set(-0.35, 0, 0);
+    caretaker.add(leftShoe);
+    const rightShoe = leftShoe.clone();
+    rightShoe.position.x = 0.35;
+    caretaker.add(rightShoe);
+
+    return caretaker;
+}
+
+// ============================================
+// CREATE HOUSE
+// ============================================
+function createHouse(): THREE.Group {
+    const house = new THREE.Group();
+
+    // Walls
+    const wallGeometry = new THREE.BoxGeometry(10, 6, 12);
+    const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xd2691e, roughness: 0.7 });
+    const walls = new THREE.Mesh(wallGeometry, wallMaterial);
+    walls.position.y = 3;
+    walls.castShadow = true;
+    walls.receiveShadow = true;
+    house.add(walls);
+
+    // Roof
+    const roofGeometry = new THREE.ConeGeometry(7.5, 4, 4);
+    const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.8 });
+    const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+    roof.position.y = 8.5;
+    roof.rotation.y = Math.PI / 4;
+    roof.castShadow = true;
+    house.add(roof);
+
+    // Door
+    const doorGeometry = new THREE.BoxGeometry(2, 3, 0.2);
+    const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x4a2511 });
+    const door = new THREE.Mesh(doorGeometry, doorMaterial);
+    door.position.set(0, 2, 6.1);
+    house.add(door);
+
+    // Handle
+    const handleGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.05);
+    const handleMaterial = new THREE.MeshStandardMaterial({ color: 0xffd700 });
+    const handle = new THREE.Mesh(handleGeometry, handleMaterial);
+    handle.position.set(0.7, 2, 6.2);
+    handle.rotation.z = Math.PI / 2;
+    house.add(handle);
+
+    // Windows
+    const windowGeometry = new THREE.BoxGeometry(1.2, 1.2, 0.2);
+    const windowMaterial = new THREE.MeshStandardMaterial({ color: 0x87ceeb });
+    [-1.5, 1.5].forEach(x => {
+        const win = new THREE.Mesh(windowGeometry, windowMaterial);
+        win.position.set(x, 5, 6.1);
+        house.add(win);
     });
 
-    return (
-        <group ref={groupRef} position={position} scale={0.8}>
-            {/* Body (shirt) */}
-            <mesh position={[0, 1.1, 0]} castShadow><boxGeometry args={[0.9, 1.5, 0.55]} /><meshStandardMaterial color="#8B4513" /></mesh>
-            {/* Head */}
-            <mesh position={[0, 2.2, 0]} castShadow><sphereGeometry args={[0.28, 12, 12]} /><meshStandardMaterial color="#FFDBAC" /></mesh>
-            {/* Hat */}
-            <mesh position={[0, 2.6, 0]} castShadow><coneGeometry args={[0.35, 0.4, 12]} /><meshStandardMaterial color="#654321" /></mesh>
-            {/* Arms */}
-            <mesh position={[-0.55, 1.2, 0]} castShadow><boxGeometry args={[0.22, 0.9, 0.22]} /><meshStandardMaterial color="#FFDBAC" /></mesh>
-            <mesh position={[0.55, 1.2, 0]} castShadow><boxGeometry args={[0.22, 0.9, 0.22]} /><meshStandardMaterial color="#FFDBAC" /></mesh>
-            {/* Legs */}
-            <mesh position={[-0.22, 0.4, 0]} castShadow><boxGeometry args={[0.22, 0.8, 0.22]} /><meshStandardMaterial color="#2C2C2C" /></mesh>
-            <mesh position={[0.22, 0.4, 0]} castShadow><boxGeometry args={[0.22, 0.8, 0.22]} /><meshStandardMaterial color="#2C2C2C" /></mesh>
-        </group>
-    );
-}
+    // Chimney
+    const chimneyGeometry = new THREE.BoxGeometry(0.8, 3, 0.8);
+    const chimneyMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
+    const chimney = new THREE.Mesh(chimneyGeometry, chimneyMaterial);
+    chimney.position.set(3, 6, -3);
+    chimney.castShadow = true;
+    house.add(chimney);
 
-// ============================================
-// BUILDINGS
-// ============================================
-function FarmHouse({ position }: { position: [number, number, number] }) {
-    return (
-        <group position={position}>
-            {/* Walls */}
-            <mesh position={[0, 2, 0]} castShadow receiveShadow><boxGeometry args={[6, 4, 7]} /><meshStandardMaterial color="#D2691E" /></mesh>
-            {/* Roof */}
-            <mesh position={[0, 5.2, 0]} rotation={[0, Math.PI / 4, 0]} castShadow><coneGeometry args={[5, 2.8, 4]} /><meshStandardMaterial color="#8B4513" /></mesh>
-            {/* Door */}
-            <mesh position={[0, 1.2, 3.55]} castShadow><boxGeometry args={[1.2, 1.8, 0.15]} /><meshStandardMaterial color="#4A2511" /></mesh>
-            {/* Windows */}
-            <mesh position={[-1.1, 3.2, 3.55]}><boxGeometry args={[0.75, 0.75, 0.12]} /><meshStandardMaterial color="#87CEEB" /></mesh>
-            <mesh position={[1.1, 3.2, 3.55]}><boxGeometry args={[0.75, 0.75, 0.12]} /><meshStandardMaterial color="#87CEEB" /></mesh>
-            {/* Chimney */}
-            <mesh position={[2, 4, -2]} castShadow><boxGeometry args={[0.5, 1.8, 0.5]} /><meshStandardMaterial color="#8B4513" /></mesh>
-        </group>
-    );
-}
+    // Porch
+    const porchGeometry = new THREE.BoxGeometry(3, 0.3, 1.5);
+    const porchMaterial = new THREE.MeshStandardMaterial({ color: 0xa0522d });
+    const porch = new THREE.Mesh(porchGeometry, porchMaterial);
+    porch.position.set(0, 0.15, 6.5);
+    house.add(porch);
 
-function Barn({ position }: { position: [number, number, number] }) {
-    return (
-        <group position={position}>
-            {/* Main barn */}
-            <mesh position={[0, 3, 0]} castShadow receiveShadow><boxGeometry args={[9, 6, 8]} /><meshStandardMaterial color="#8B0000" /></mesh>
-            {/* Roof */}
-            <mesh position={[0, 7.2, 0]} rotation={[0, Math.PI / 4, 0]} castShadow><coneGeometry args={[6, 3.2, 4]} /><meshStandardMaterial color="#654321" /></mesh>
-            {/* Barn door */}
-            <mesh position={[0, 1.8, 4.05]} castShadow><boxGeometry args={[2.2, 2.8, 0.2]} /><meshStandardMaterial color="#4A2511" /></mesh>
-            {/* Windows */}
-            <mesh position={[-1.4, 5, 4.05]}><boxGeometry args={[0.65, 0.65, 0.12]} /><meshStandardMaterial color="#87CEEB" /></mesh>
-            <mesh position={[1.4, 5, 4.05]}><boxGeometry args={[0.65, 0.65, 0.12]} /><meshStandardMaterial color="#87CEEB" /></mesh>
-        </group>
-    );
-}
-
-function Silo({ position }: { position: [number, number, number] }) {
-    return (
-        <group position={position}>
-            <mesh position={[0, 2, 0]} castShadow><cylinderGeometry args={[0.8, 0.8, 4, 16]} /><meshStandardMaterial color="#C0C0C0" /></mesh>
-            <mesh position={[0, 4.3, 0]} castShadow><coneGeometry args={[0.8, 0.7, 16]} /><meshStandardMaterial color="#C0C0C0" /></mesh>
-        </group>
-    );
-}
-
-function WaterTrough({ position }: { position: [number, number, number] }) {
-    return (
-        <group position={position}>
-            <mesh position={[0, 0.3, 0]} castShadow><boxGeometry args={[2, 0.55, 0.8]} /><meshStandardMaterial color="#696969" /></mesh>
-            <mesh position={[0, 0.5, 0]}><boxGeometry args={[1.85, 0.22, 0.65]} /><meshStandardMaterial color="#4A90E2" /></mesh>
-        </group>
-    );
-}
-
-// ============================================
-// ENVIRONMENT
-// ============================================
-function Ground({ isNight }: { isNight: boolean }) {
-    return (
-        <>
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-                <planeGeometry args={[200, 200]} />
-                <meshStandardMaterial color={isNight ? "#2D4A22" : "#4A9D2F"} />
-            </mesh>
-        </>
-    );
-}
-
-function Tree({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
-    return (
-        <group position={position} scale={scale}>
-            <mesh position={[0, 1.8, 0]} castShadow><cylinderGeometry args={[0.4, 0.55, 3.5, 8]} /><meshStandardMaterial color="#654321" /></mesh>
-            <mesh position={[0, 4.2, 0]} castShadow><sphereGeometry args={[2.2, 8, 8]} /><meshStandardMaterial color="#228B22" /></mesh>
-        </group>
-    );
-}
-
-function FenceSection({ start, end }: { start: [number, number, number]; end: [number, number, number] }) {
-    const direction = new THREE.Vector3(end[0] - start[0], 0, end[2] - start[2]);
-    const length = direction.length();
-    const center: [number, number, number] = [(start[0] + end[0]) / 2, 1.2, (start[2] + end[2]) / 2];
-    const angle = Math.atan2(direction.x, direction.z);
-
-    return (
-        <group position={center} rotation={[0, angle, 0]}>
-            {/* Posts */}
-            {Array.from({ length: Math.ceil(length / 4) + 1 }).map((_, i) => (
-                <mesh key={`post-${i}`} position={[0, 0, -length / 2 + i * 4]} castShadow>
-                    <boxGeometry args={[0.25, 1.8, 0.25]} />
-                    <meshStandardMaterial color="#8B6914" />
-                </mesh>
-            ))}
-            {/* Rails */}
-            <mesh position={[0, 0.4, 0]} castShadow><boxGeometry args={[0.18, 0.14, length]} /><meshStandardMaterial color="#8B6914" /></mesh>
-            <mesh position={[0, 0.9, 0]} castShadow><boxGeometry args={[0.18, 0.14, length]} /><meshStandardMaterial color="#8B6914" /></mesh>
-            <mesh position={[0, 1.4, 0]} castShadow><boxGeometry args={[0.18, 0.14, length]} /><meshStandardMaterial color="#8B6914" /></mesh>
-        </group>
-    );
-}
-
-function Cloud({ position, isNight }: { position: [number, number, number]; isNight: boolean }) {
-    return (
-        <mesh position={position}>
-            <sphereGeometry args={[5, 8, 8]} />
-            <meshStandardMaterial color={isNight ? "#333333" : "#FFFFFF"} />
-        </mesh>
-    );
-}
-
-function SunMoon({ isNight }: { isNight: boolean }) {
-    // Generate random star positions
-    const stars = useMemo(() => {
-        const positions: [number, number, number][] = [];
-        for (let i = 0; i < 100; i++) {
-            const theta = Math.random() * Math.PI * 2;
-            const phi = Math.random() * Math.PI * 0.4 + 0.1; // Upper hemisphere
-            const r = 120 + Math.random() * 30;
-            positions.push([
-                Math.sin(theta) * Math.cos(phi) * r,
-                Math.sin(phi) * r + 20,
-                Math.cos(theta) * Math.cos(phi) * r,
-            ]);
-        }
-        return positions;
-    }, []);
-
-    return (
-        <>
-            {/* Sun */}
-            {!isNight && (
-                <mesh position={[50, 60, 50]}>
-                    <sphereGeometry args={[4, 16, 16]} />
-                    <meshBasicMaterial color="#FFD700" />
-                </mesh>
-            )}
-            {/* Moon - bigger and brighter */}
-            {isNight && (
-                <>
-                    <mesh position={[-50, 65, -50]}>
-                        <sphereGeometry args={[5, 16, 16]} />
-                        <meshBasicMaterial color="#FFFACD" />
-                    </mesh>
-                    {/* Moon glow */}
-                    <mesh position={[-50, 65, -50]}>
-                        <sphereGeometry args={[7, 16, 16]} />
-                        <meshBasicMaterial color="#FFFACD" transparent opacity={0.3} />
-                    </mesh>
-                    {/* Stars */}
-                    {stars.map((pos, i) => (
-                        <mesh key={`star-${i}`} position={pos}>
-                            <sphereGeometry args={[0.3 + Math.random() * 0.4, 6, 6]} />
-                            <meshBasicMaterial color="#FFFFFF" />
-                        </mesh>
-                    ))}
-                </>
-            )}
-        </>
-    );
-}
-
-// ============================================
-// CAMERA CONTROLLER
-// ============================================
-function SmoothCameraController({ targetState }: { targetState: { distance: number; rotationY: number; rotationX: number } }) {
-    const { camera } = useThree();
-    const currentState = useRef({ distance: 50, rotationY: 0.5, rotationX: 0.4 });
-
-    useFrame(() => {
-        currentState.current.distance = THREE.MathUtils.lerp(currentState.current.distance, targetState.distance, 0.1);
-        currentState.current.rotationY = THREE.MathUtils.lerp(currentState.current.rotationY, targetState.rotationY, 0.08);
-        currentState.current.rotationX = THREE.MathUtils.lerp(currentState.current.rotationX, targetState.rotationX, 0.08);
-        const { distance, rotationY, rotationX } = currentState.current;
-        const x = Math.sin(rotationY) * Math.cos(rotationX) * distance;
-        const y = Math.sin(rotationX) * distance;
-        const z = Math.cos(rotationY) * Math.cos(rotationX) * distance;
-        camera.position.set(x, Math.max(8, y), z);
-        camera.lookAt(0, 2, 0);
+    // Pillars
+    const pillarGeometry = new THREE.CylinderGeometry(0.2, 0.2, 2, 8);
+    const pillarMaterial = new THREE.MeshStandardMaterial({ color: 0xd2b48c });
+    [-1.2, 1.2].forEach(x => {
+        const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+        pillar.position.set(x, 1, 6.5);
+        pillar.castShadow = true;
+        house.add(pillar);
     });
-    return null;
+
+    return house;
 }
 
 // ============================================
-// DYNAMIC ANIMALS SCENE
+// CREATE BARN
 // ============================================
-function FarmScene({ cameraState, animalCounts, isNight }: { cameraState: { distance: number; rotationY: number; rotationX: number }; animalCounts: { hens: number; goats: number; cows: number }; isNight: boolean }) {
-    const cowPositions = useMemo(() => {
-        const positions: [number, number, number][] = [];
-        for (let i = 0; i < Math.min(animalCounts.cows, 10); i++) {
-            positions.push([-18 + (i % 3) * 12, 0, 8 + Math.floor(i / 3) * 10]);
-        }
-        return positions;
-    }, [animalCounts.cows]);
+function createBarn(): THREE.Group {
+    const barn = new THREE.Group();
 
-    const goatPositions = useMemo(() => {
-        const positions: [number, number, number][] = [];
-        for (let i = 0; i < Math.min(animalCounts.goats, 15); i++) {
-            positions.push([-12 + (i % 4) * 7, 0, -6 + Math.floor(i / 4) * 7]);
-        }
-        return positions;
-    }, [animalCounts.goats]);
+    // Main barn
+    const barnGeometry = new THREE.BoxGeometry(14, 9, 12);
+    const barnMaterial = new THREE.MeshStandardMaterial({ color: 0x8b0000, roughness: 0.8 });
+    const barnBody = new THREE.Mesh(barnGeometry, barnMaterial);
+    barnBody.position.y = 4.5;
+    barnBody.castShadow = true;
+    barnBody.receiveShadow = true;
+    barn.add(barnBody);
 
-    const henPositions = useMemo(() => {
-        const positions: [number, number, number][] = [];
-        for (let i = 0; i < Math.min(animalCounts.hens, 20); i++) {
-            positions.push([6 + (i % 5) * 4, 0, 12 + Math.floor(i / 5) * 4]);
-        }
-        return positions;
-    }, [animalCounts.hens]);
+    // Roof
+    const roofGeometry = new THREE.ConeGeometry(8, 5, 4);
+    const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x654321, roughness: 0.9 });
+    const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+    roof.position.y = 11;
+    roof.rotation.y = Math.PI / 4;
+    roof.castShadow = true;
+    barn.add(roof);
 
-    return (
-        <>
-            <ambientLight intensity={isNight ? 0.5 : 0.6} />
-            <directionalLight
-                position={isNight ? [-50, 60, -50] : [50, 60, 50]}
-                intensity={isNight ? 0.6 : 0.9}
-                castShadow
-                shadow-mapSize={[2048, 2048]}
-                color={isNight ? "#B8C4FF" : "#FFFFFF"}
-            />
-            <hemisphereLight args={[isNight ? '#2a2a4e' : '#87CEEB', isNight ? '#2a3e2a' : '#7CB342', isNight ? 0.6 : 0.4]} />
-            <color attach="background" args={[isNight ? '#0F0F2A' : '#87CEEB']} />
-            <fog attach="fog" args={[isNight ? '#0F0F2A' : '#87CEEB', 100, 250]} />
+    // Door
+    const doorGeometry = new THREE.BoxGeometry(3.5, 4, 0.3);
+    const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x4a2511 });
+    const door = new THREE.Mesh(doorGeometry, doorMaterial);
+    door.position.set(0, 2.5, 6.15);
+    barn.add(door);
 
-            <SmoothCameraController targetState={cameraState} />
-            <Ground isNight={isNight} />
-            <SunMoon isNight={isNight} />
+    // Windows
+    const windowGeometry = new THREE.BoxGeometry(1, 1, 0.2);
+    const windowMaterial = new THREE.MeshStandardMaterial({ color: 0x87ceeb });
+    [-2, 2].forEach(x => {
+        const win = new THREE.Mesh(windowGeometry, windowMaterial);
+        win.position.set(x, 7, 6.15);
+        barn.add(win);
+    });
 
-            {/* Clouds */}
-            <Cloud position={[25, 40, -25]} isNight={isNight} />
-            <Cloud position={[-30, 45, 15]} isNight={isNight} />
-            <Cloud position={[10, 38, 35]} isNight={isNight} />
+    return barn;
+}
 
-            {/* Buildings */}
-            <FarmHouse position={[35, 0, -30]} />
-            <Barn position={[-35, 0, -35]} />
-            <Silo position={[-28, 0, -22]} />
-            <Silo position={[-24, 0, -18]} />
+// ============================================
+// CREATE SILO
+// ============================================
+function createSilo(): THREE.Group {
+    const silo = new THREE.Group();
 
-            {/* Fences */}
-            <FenceSection start={[-45, 0, -45]} end={[45, 0, -45]} />
-            <FenceSection start={[45, 0, -45]} end={[45, 0, 45]} />
-            <FenceSection start={[45, 0, 45]} end={[-45, 0, 45]} />
-            <FenceSection start={[-45, 0, 45]} end={[-45, 0, -45]} />
+    const siloGeometry = new THREE.CylinderGeometry(1.2, 1.2, 6, 16);
+    const siloMaterial = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, roughness: 0.6, metalness: 0.3 });
+    const siloBody = new THREE.Mesh(siloGeometry, siloMaterial);
+    siloBody.position.y = 3;
+    siloBody.castShadow = true;
+    silo.add(siloBody);
 
-            {/* Trees around the perimeter */}
-            {Array.from({ length: 12 }).map((_, i) => <Tree key={`tree-n-${i}`} position={[-42 + i * 7, 0, -50]} scale={0.85} />)}
-            {Array.from({ length: 12 }).map((_, i) => <Tree key={`tree-s-${i}`} position={[-42 + i * 7, 0, 50]} scale={0.85} />)}
-            {Array.from({ length: 10 }).map((_, i) => <Tree key={`tree-e-${i}`} position={[50, 0, -40 + i * 8]} scale={0.85} />)}
-            {Array.from({ length: 10 }).map((_, i) => <Tree key={`tree-w-${i}`} position={[-50, 0, -40 + i * 8]} scale={0.85} />)}
+    const topGeometry = new THREE.ConeGeometry(1.2, 1, 16);
+    const top = new THREE.Mesh(topGeometry, siloMaterial);
+    top.position.y = 6.5;
+    top.castShadow = true;
+    silo.add(top);
 
-            {/* Water troughs */}
-            <WaterTrough position={[-12, 0, 6]} />
-            <WaterTrough position={[12, 0, 9]} />
+    return silo;
+}
 
-            {/* Caretaker */}
-            <Caretaker position={[-25, 0, -18]} />
+// ============================================
+// CREATE TREE
+// ============================================
+function createTree(): THREE.Group {
+    const tree = new THREE.Group();
 
-            {/* Dynamic Animals */}
-            {cowPositions.map((pos, i) => <RealisticCow key={`cow-${i}`} position={pos} rotation={Math.random() * Math.PI * 2} />)}
-            {goatPositions.map((pos, i) => <RealisticGoat key={`goat-${i}`} position={pos} rotation={Math.random() * Math.PI * 2} />)}
-            {henPositions.map((pos, i) => <RealisticHen key={`hen-${i}`} position={pos} rotation={Math.random() * Math.PI * 2} />)}
-        </>
-    );
+    const trunkGeometry = new THREE.CylinderGeometry(0.6, 0.8, 5, 8);
+    const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x654321 });
+    const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+    trunk.position.y = 2.5;
+    trunk.castShadow = true;
+    tree.add(trunk);
+
+    const foliageGeometry = new THREE.SphereGeometry(3.5, 8, 8);
+    const foliageMaterial = new THREE.MeshStandardMaterial({ color: 0x228b22, roughness: 0.7 });
+    const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
+    foliage.position.y = 5.5;
+    foliage.castShadow = true;
+    tree.add(foliage);
+
+    return tree;
+}
+
+// ============================================
+// CREATE FENCE
+// ============================================
+function createFence(length: number): THREE.Group {
+    const fence = new THREE.Group();
+    const postMaterial = new THREE.MeshStandardMaterial({ color: 0x8b6914, roughness: 0.8 });
+
+    for (let i = -length / 2; i <= length / 2; i += 5) {
+        const postGeometry = new THREE.BoxGeometry(0.4, 2.5, 0.4);
+        const post = new THREE.Mesh(postGeometry, postMaterial);
+        post.position.set(i, 1.25, 0);
+        post.castShadow = true;
+        fence.add(post);
+    }
+
+    const railGeometry = new THREE.BoxGeometry(length + 10, 0.2, 0.3);
+    [2, 1.3, 0.6].forEach(y => {
+        const rail = new THREE.Mesh(railGeometry, postMaterial);
+        rail.position.y = y;
+        rail.castShadow = true;
+        fence.add(rail);
+    });
+
+    return fence;
+}
+
+// ============================================
+// CREATE WATER TROUGH
+// ============================================
+function createWaterTrough(): THREE.Group {
+    const trough = new THREE.Group();
+
+    const troughGeometry = new THREE.BoxGeometry(3, 0.8, 1.2);
+    const troughMaterial = new THREE.MeshStandardMaterial({ color: 0x696969 });
+    const troughBody = new THREE.Mesh(troughGeometry, troughMaterial);
+    troughBody.position.y = 0.4;
+    trough.add(troughBody);
+
+    const waterGeometry = new THREE.BoxGeometry(2.8, 0.3, 1);
+    const waterMaterial = new THREE.MeshStandardMaterial({ color: 0x4a90e2, roughness: 0.3, metalness: 0.2 });
+    const water = new THREE.Mesh(waterGeometry, waterMaterial);
+    water.position.y = 0.75;
+    trough.add(water);
+
+    return trough;
 }
 
 // ============================================
@@ -520,52 +531,499 @@ export default function FarmScreen() {
     const router = useRouter();
     const { state, getTotalAnimals } = useFarm();
     const { colors, isDark } = useTheme();
-    const [cameraState, setCameraState] = useState({ distance: 55, rotationY: 0.5, rotationX: 0.4 });
     const [isNight, setIsNight] = useState(false);
     const [showConvertReminder, setShowConvertReminder] = useState(true);
-    const lastTouch = useRef({ x: 0, y: 0 });
+    const [cameraDistance, setCameraDistance] = useState(60);
+
+    const glRef = useRef<GLView>(null);
+    const sceneRef = useRef<THREE.Scene | null>(null);
+    const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+    const rendererRef = useRef<Renderer | null>(null);
+    const animationRef = useRef<number | null>(null);
+    const animalsRef = useRef<any[]>([]);
+    const caretakerRef = useRef<any>(null);
+    const lightsRef = useRef<{ ambient: THREE.AmbientLight | null; sun: THREE.DirectionalLight | null; moon: THREE.DirectionalLight | null; sunMesh: THREE.Mesh | null; moonMesh: THREE.Mesh | null; stars: THREE.Points | null; clouds: THREE.Group | null }>({ ambient: null, sun: null, moon: null, sunMesh: null, moonMesh: null, stars: null, clouds: null });
+    const lastTouchRef = useRef({ x: 0, y: 0 });
+    const cameraAngleRef = useRef({ horizontal: 0, vertical: 0.3 });
 
     const todayHours = (state.todayMinutes / 60).toFixed(1);
+
+    const updateDayNight = useCallback((night: boolean) => {
+        if (!sceneRef.current || !lightsRef.current.ambient) return;
+
+        const { ambient, sun, moon, sunMesh, moonMesh, stars, clouds } = lightsRef.current;
+
+        if (night) {
+            sceneRef.current.background = new THREE.Color(0x0a0a1a);
+            sceneRef.current.fog = new THREE.Fog(0x0a0a1a, 250, 500);
+            if (ambient) ambient.intensity = 0.3;
+            if (sun) sun.intensity = 0;
+            if (moon) moon.intensity = 0.6;
+            if (sunMesh) sunMesh.visible = false;
+            if (moonMesh) moonMesh.visible = true;
+            if (stars) stars.visible = true;
+            if (clouds) {
+                clouds.children.forEach((cloud: any) => {
+                    if (cloud.material) {
+                        cloud.material.color.set(0x333333);
+                        cloud.material.emissiveIntensity = 0.1;
+                    }
+                });
+            }
+        } else {
+            sceneRef.current.background = new THREE.Color(0x87ceeb);
+            sceneRef.current.fog = new THREE.Fog(0x87ceeb, 250, 500);
+            if (ambient) ambient.intensity = 0.6;
+            if (sun) sun.intensity = 0.9;
+            if (moon) moon.intensity = 0;
+            if (sunMesh) sunMesh.visible = true;
+            if (moonMesh) moonMesh.visible = false;
+            if (stars) stars.visible = false;
+            if (clouds) {
+                clouds.children.forEach((cloud: any) => {
+                    if (cloud.material) {
+                        cloud.material.color.set(0xffffff);
+                        cloud.material.emissiveIntensity = 0.3;
+                    }
+                });
+            }
+        }
+    }, []);
+
+    useEffect(() => {
+        updateDayNight(isNight);
+    }, [isNight, updateDayNight]);
+
+    const onContextCreate = useCallback(async (gl: any) => {
+        // Create renderer
+        const renderer = new Renderer({ gl });
+        renderer.setSize(gl.drawingBufferWidth, gl.drawingBufferHeight);
+        renderer.setClearColor(0x87ceeb);
+        renderer.shadowMap.enabled = true;
+        rendererRef.current = renderer;
+
+        // Create scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+        scene.fog = new THREE.Fog(0x87ceeb, 250, 500);
+        sceneRef.current = scene;
+
+        // Create camera
+        const camera = new THREE.PerspectiveCamera(75, gl.drawingBufferWidth / gl.drawingBufferHeight, 0.1, 1000);
+        camera.position.set(30, 20, 50);
+        camera.lookAt(0, 5, 0);
+        cameraRef.current = camera;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        lightsRef.current.ambient = ambientLight;
+
+        const sunLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        sunLight.position.set(50, 60, 50);
+        sunLight.castShadow = true;
+        sunLight.shadow.camera.left = -150;
+        sunLight.shadow.camera.right = 150;
+        sunLight.shadow.camera.top = 150;
+        sunLight.shadow.camera.bottom = -150;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        scene.add(sunLight);
+        lightsRef.current.sun = sunLight;
+
+        const moonLight = new THREE.DirectionalLight(0x8899ff, 0);
+        moonLight.position.set(-50, 60, -50);
+        moonLight.castShadow = true;
+        scene.add(moonLight);
+        lightsRef.current.moon = moonLight;
+
+        // Sun mesh
+        const sunGeometry = new THREE.SphereGeometry(5, 32, 32);
+        const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xFFD700 });
+        const sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
+        sunMesh.position.set(50, 60, 50);
+        scene.add(sunMesh);
+        lightsRef.current.sunMesh = sunMesh;
+
+        // Moon mesh
+        const moonGeometry = new THREE.SphereGeometry(4, 32, 32);
+        const moonMaterial = new THREE.MeshBasicMaterial({ color: 0xEEEEEE });
+        const moonMesh = new THREE.Mesh(moonGeometry, moonMaterial);
+        moonMesh.position.set(-50, 60, -50);
+        moonMesh.visible = false;
+        scene.add(moonMesh);
+        lightsRef.current.moonMesh = moonMesh;
+
+        // Stars
+        const starsGeometry = new THREE.BufferGeometry();
+        const starsVertices = [];
+        for (let i = 0; i < 500; i++) {
+            const distance = 300;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.random() * Math.PI;
+            starsVertices.push(
+                distance * Math.sin(phi) * Math.cos(theta),
+                distance * Math.sin(phi) * Math.sin(theta),
+                distance * Math.cos(phi)
+            );
+        }
+        starsGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(starsVertices), 3));
+        const starsMaterial = new THREE.PointsMaterial({ color: 0xFFFFFF, size: 2 });
+        const stars = new THREE.Points(starsGeometry, starsMaterial);
+        stars.visible = false;
+        scene.add(stars);
+        lightsRef.current.stars = stars;
+
+        // Clouds
+        const cloudsGroup = new THREE.Group();
+        for (let i = 0; i < 8; i++) {
+            const cloudGeometry = new THREE.SphereGeometry(8, 8, 8);
+            const cloudMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                emissive: 0xffffff,
+                emissiveIntensity: 0.3,
+                roughness: 1
+            });
+            const cloud = new THREE.Mesh(cloudGeometry, cloudMaterial);
+            cloud.position.set(
+                (Math.random() - 0.5) * 300,
+                80 + Math.random() * 40,
+                (Math.random() - 0.5) * 300
+            );
+            cloud.scale.set(2 + Math.random() * 2, 1 + Math.random() * 0.5, 2 + Math.random() * 2);
+            cloudsGroup.add(cloud);
+        }
+        scene.add(cloudsGroup);
+        lightsRef.current.clouds = cloudsGroup;
+
+        // Ground with grass texture
+        const groundGeometry = new THREE.PlaneGeometry(300, 300);
+        const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x4a9d2f, roughness: 0.8 });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Add buildings
+        const house = createHouse();
+        house.position.set(60, 0, -60);
+        scene.add(house);
+
+        const barn = createBarn();
+        barn.position.set(-60, 0, -60);
+        scene.add(barn);
+
+        // Add silos
+        const silo1 = createSilo();
+        silo1.position.set(-50, 0, -40);
+        scene.add(silo1);
+        const silo2 = createSilo();
+        silo2.position.set(-45, 0, -35);
+        scene.add(silo2);
+
+        // Add fences with trees
+        const fenceLength = 150;
+
+        const fence1 = createFence(fenceLength);
+        fence1.position.set(0, 0, -75);
+        scene.add(fence1);
+        for (let i = -70; i <= 70; i += 15) {
+            const tree = createTree();
+            tree.position.set(i, 0, -80);
+            scene.add(tree);
+        }
+
+        const fence2 = createFence(fenceLength);
+        fence2.rotation.y = Math.PI / 2;
+        fence2.position.set(-75, 0, 0);
+        scene.add(fence2);
+        for (let i = -70; i <= 70; i += 15) {
+            const tree = createTree();
+            tree.position.set(-80, 0, i);
+            scene.add(tree);
+        }
+
+        const fence3 = createFence(fenceLength);
+        fence3.position.set(0, 0, 75);
+        scene.add(fence3);
+        for (let i = -70; i <= 70; i += 15) {
+            const tree = createTree();
+            tree.position.set(i, 0, 80);
+            scene.add(tree);
+        }
+
+        const fence4 = createFence(fenceLength);
+        fence4.rotation.y = Math.PI / 2;
+        fence4.position.set(75, 0, 0);
+        scene.add(fence4);
+        for (let i = -70; i <= 70; i += 15) {
+            const tree = createTree();
+            tree.position.set(80, 0, i);
+            scene.add(tree);
+        }
+
+        // Add water troughs
+        const water1 = createWaterTrough();
+        water1.position.set(-20, 0, 10);
+        scene.add(water1);
+        const water2 = createWaterTrough();
+        water2.position.set(20, 0, 15);
+        scene.add(water2);
+
+        // Add caretaker
+        const caretaker = createCaretaker();
+        caretaker.position.set(-40, 0, -30);
+        scene.add(caretaker);
+        caretakerRef.current = {
+            obj: caretaker,
+            direction: new THREE.Vector3(1, 0, 0),
+            walkSpeed: 0.015,
+            turnCooldown: 0
+        };
+
+        // Add animals based on farm state
+        animalsRef.current = [];
+
+        // Add cows
+        const numCows = Math.min(state.cows, 5);
+        for (let i = 0; i < numCows; i++) {
+            const cow = createCow();
+            cow.position.set(-30 + i * 15, 0, 20 + (i % 2) * 10);
+            scene.add(cow);
+            animalsRef.current.push({
+                obj: cow,
+                type: 'cow',
+                direction: new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).normalize(),
+                walkSpeed: 0.02,
+                grazingTime: 0,
+                isGrazing: Math.random() > 0.5,
+                turnCooldown: 0
+            });
+        }
+
+        // Add goats
+        const numGoats = Math.min(state.goats, 8);
+        for (let i = 0; i < numGoats; i++) {
+            const goat = createGoat();
+            goat.position.set(30 + (i % 3) * 10, 0, 20 + Math.floor(i / 3) * 10);
+            scene.add(goat);
+            animalsRef.current.push({
+                obj: goat,
+                type: 'goat',
+                direction: new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).normalize(),
+                walkSpeed: 0.025,
+                grazingTime: 0,
+                isGrazing: Math.random() > 0.5,
+                turnCooldown: 0
+            });
+        }
+
+        // Add hens
+        const numHens = Math.min(state.hens, 10);
+        for (let i = 0; i < numHens; i++) {
+            const hen = createHen();
+            hen.position.set((i % 5) * 8 - 16, 0, 30 + Math.floor(i / 5) * 6);
+            scene.add(hen);
+            animalsRef.current.push({
+                obj: hen,
+                type: 'hen',
+                direction: new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).normalize(),
+                walkSpeed: 0.015,
+                grazingTime: 0,
+                isGrazing: Math.random() > 0.5,
+                turnCooldown: 0
+            });
+        }
+
+        // Animation loop
+        let lastTime = Date.now();
+        const farmBoundary = 70;
+
+        const animate = () => {
+            animationRef.current = requestAnimationFrame(animate);
+
+            const currentTime = Date.now();
+            const deltaTime = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+
+            // Update camera position
+            if (cameraRef.current) {
+                const { horizontal, vertical } = cameraAngleRef.current;
+                const x = Math.sin(horizontal) * Math.cos(vertical) * cameraDistance;
+                const y = Math.max(5, Math.sin(vertical) * cameraDistance);
+                const z = Math.cos(horizontal) * Math.cos(vertical) * cameraDistance;
+                cameraRef.current.position.set(x, y, z);
+                cameraRef.current.lookAt(0, 5, 0);
+            }
+
+            // Update animals
+            animalsRef.current.forEach(animal => {
+                const userData = animal;
+                const grazingDuration = 4;
+
+                if (userData.isGrazing) {
+                    userData.grazingTime += deltaTime;
+
+                    // Head bobbing while grazing
+                    const head = userData.obj.getObjectByName('head');
+                    if (head) {
+                        head.rotation.x = Math.sin(currentTime * 0.003) * 0.2;
+                    }
+
+                    // Tail wagging
+                    const tail = userData.obj.getObjectByName('tail');
+                    if (tail) {
+                        tail.rotation.z = 0.3 + Math.sin(currentTime * 0.004) * 0.1;
+                    }
+
+                    if (userData.grazingTime > grazingDuration) {
+                        userData.isGrazing = false;
+                        userData.grazingTime = 0;
+                        userData.turnCooldown = 0;
+                        const angle = (Math.random() - 0.5) * Math.PI / 2;
+                        userData.direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+                    }
+                } else {
+                    userData.turnCooldown -= deltaTime;
+
+                    const moveX = userData.direction.x * userData.walkSpeed;
+                    const moveZ = userData.direction.z * userData.walkSpeed;
+
+                    userData.obj.position.x += moveX;
+                    userData.obj.position.z += moveZ;
+
+                    // Boundary check
+                    if (Math.abs(userData.obj.position.x) > farmBoundary || Math.abs(userData.obj.position.z) > farmBoundary) {
+                        userData.direction.multiplyScalar(-1);
+                        userData.turnCooldown = 2;
+                    }
+
+                    // Random turning
+                    if (userData.turnCooldown <= 0 && Math.random() < 0.02) {
+                        const turnAngle = (Math.random() - 0.5) * Math.PI / 3;
+                        userData.direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), turnAngle);
+                        userData.turnCooldown = 1;
+                    }
+
+                    // Face direction
+                    const angle = Math.atan2(userData.direction.x, userData.direction.z);
+                    userData.obj.rotation.y = angle;
+
+                    // Leg animation
+                    for (let i = 0; i < 4; i++) {
+                        const leg = userData.obj.getObjectByName(`leg${i}`);
+                        if (leg) {
+                            leg.rotation.x = Math.sin(currentTime * 0.008 + i) * 0.3;
+                        }
+                    }
+
+                    // Head bobbing
+                    const head = userData.obj.getObjectByName('head');
+                    if (head) {
+                        const baseY = userData.type === 'hen' ? 1.1 : (userData.type === 'goat' ? 2.2 : 2.5);
+                        head.position.y = baseY + Math.sin(currentTime * 0.006) * 0.1;
+                    }
+
+                    // Random grazing
+                    if (Math.random() < 0.01) {
+                        userData.isGrazing = true;
+                        userData.grazingTime = 0;
+                    }
+                }
+            });
+
+            // Update caretaker
+            if (caretakerRef.current) {
+                const userData = caretakerRef.current;
+                userData.turnCooldown -= deltaTime;
+
+                const moveX = userData.direction.x * userData.walkSpeed;
+                const moveZ = userData.direction.z * userData.walkSpeed;
+
+                userData.obj.position.x += moveX;
+                userData.obj.position.z += moveZ;
+
+                if (Math.abs(userData.obj.position.x) > farmBoundary || Math.abs(userData.obj.position.z) > farmBoundary) {
+                    userData.direction.multiplyScalar(-1);
+                    userData.turnCooldown = 2;
+                }
+
+                if (userData.turnCooldown <= 0 && Math.random() < 0.015) {
+                    const turnAngle = (Math.random() - 0.5) * Math.PI / 4;
+                    userData.direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), turnAngle);
+                    userData.turnCooldown = 1.5;
+                }
+
+                const angle = Math.atan2(userData.direction.x, userData.direction.z);
+                userData.obj.rotation.y = angle;
+
+                // Arm swing
+                const leftArm = userData.obj.getObjectByName('leftArm');
+                const rightArm = userData.obj.getObjectByName('rightArm');
+                if (leftArm && rightArm) {
+                    leftArm.rotation.x = Math.sin(currentTime * 0.008) * 0.4;
+                    rightArm.rotation.x = -Math.sin(currentTime * 0.008) * 0.4;
+                }
+
+                // Leg swing
+                const leftLeg = userData.obj.getObjectByName('leftLeg');
+                const rightLeg = userData.obj.getObjectByName('rightLeg');
+                if (leftLeg && rightLeg) {
+                    leftLeg.rotation.x = Math.sin(currentTime * 0.008) * 0.3;
+                    rightLeg.rotation.x = -Math.sin(currentTime * 0.008) * 0.3;
+                }
+            }
+
+            renderer.render(scene, camera);
+            gl.endFrameEXP();
+        };
+
+        animate();
+
+        return () => {
+            if (animationRef.current) {
+                cancelAnimationFrame(animationRef.current);
+            }
+        };
+    }, [state.hens, state.goats, state.cows, cameraDistance]);
 
     const panResponder = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
             onMoveShouldSetPanResponder: () => true,
             onPanResponderGrant: (evt) => {
-                lastTouch.current = { x: evt.nativeEvent.pageX, y: evt.nativeEvent.pageY };
+                lastTouchRef.current = { x: evt.nativeEvent.pageX, y: evt.nativeEvent.pageY };
             },
             onPanResponderMove: (evt) => {
-                const dx = (evt.nativeEvent.pageX - lastTouch.current.x) * 0.008;
-                const dy = (evt.nativeEvent.pageY - lastTouch.current.y) * 0.005;
-                lastTouch.current = { x: evt.nativeEvent.pageX, y: evt.nativeEvent.pageY };
-                setCameraState(prev => ({
-                    ...prev,
-                    rotationY: prev.rotationY + dx,
-                    rotationX: Math.max(0.15, Math.min(1.3, prev.rotationX + dy)),
-                }));
+                const dx = (evt.nativeEvent.pageX - lastTouchRef.current.x) * 0.01;
+                const dy = (evt.nativeEvent.pageY - lastTouchRef.current.y) * 0.005;
+                lastTouchRef.current = { x: evt.nativeEvent.pageX, y: evt.nativeEvent.pageY };
+
+                cameraAngleRef.current.horizontal += dx;
+                cameraAngleRef.current.vertical = Math.max(0.1, Math.min(1.2, cameraAngleRef.current.vertical + dy));
             },
         })
     ).current;
 
-    const handleZoomIn = () => setCameraState(prev => ({ ...prev, distance: Math.max(20, prev.distance - 8) }));
-    const handleZoomOut = () => setCameraState(prev => ({ ...prev, distance: Math.min(100, prev.distance + 8) }));
+    const handleZoomIn = () => setCameraDistance(prev => Math.max(20, prev - 10));
+    const handleZoomOut = () => setCameraDistance(prev => Math.min(120, prev + 10));
 
     return (
         <View style={styles.container}>
             <View style={styles.canvasContainer} {...panResponder.panHandlers}>
-                <Canvas camera={{ position: [55, 35, 55], fov: 45 }} shadows>
-                    <Suspense fallback={null}>
-                        <FarmScene cameraState={cameraState} animalCounts={{ hens: state.hens, goats: state.goats, cows: state.cows }} isNight={isNight} />
-                    </Suspense>
-                </Canvas>
+                <GLView
+                    ref={glRef}
+                    style={{ flex: 1 }}
+                    onContextCreate={onContextCreate}
+                />
             </View>
 
             <SafeAreaView style={styles.uiOverlay} pointerEvents="box-none">
                 {/* Header with Stats */}
                 <View style={[styles.header, { backgroundColor: isDark ? 'rgba(30,30,30,0.95)' : 'rgba(255,255,255,0.95)' }]}>
                     <View>
-                        <Text style={[styles.greeting, { color: colors.textSecondary }]}>Your Farm</Text>
-                        <Text style={[styles.title, { color: colors.text }]}>🏡 3D Farm</Text>
+                        <Text style={[styles.greeting, { color: colors.textSecondary }]}>🌾 Advanced 3D Farm Scene</Text>
+                        <Text style={[styles.title, { color: colors.text }]}>🏡 Your Farm</Text>
                     </View>
                     <View style={styles.statsRow}>
                         <View style={[styles.statBadge, { backgroundColor: isDark ? colors.surfaceSecondary : '#FFF8E1' }]}>
@@ -607,24 +1065,29 @@ export default function FarmScreen() {
                 <View style={styles.controlsContainer}>
                     {/* Day/Night Toggle */}
                     <TouchableOpacity
-                        style={[styles.dayNightBtn, { backgroundColor: isDark ? colors.surface : 'rgba(255,255,255,0.95)' }, isNight && styles.dayNightBtnNight]}
+                        style={[styles.dayNightBtn, isNight && styles.dayNightBtnNight]}
                         onPress={() => setIsNight(!isNight)}
                     >
                         {isNight ? <Moon size={20} color="#FFD700" /> : <Sun size={20} color="#FFD700" />}
-                        <Text style={[styles.dayNightText, { color: isDark ? colors.text : '#333' }, isNight && styles.dayNightTextNight]}>
-                            {isNight ? 'Night' : 'Day'}
+                        <Text style={[styles.dayNightText, isNight && styles.dayNightTextNight]}>
+                            {isNight ? '🌙 Night' : '🌞 Day'}
                         </Text>
                     </TouchableOpacity>
 
                     {/* Zoom Controls */}
-                    <View style={[styles.zoomControls, { backgroundColor: isDark ? colors.surface : 'rgba(255,255,255,0.95)' }]}>
-                        <TouchableOpacity style={[styles.controlBtn, { backgroundColor: isDark ? colors.primaryLight : '#E8F5E9' }]} onPress={handleZoomIn}>
-                            <ZoomIn size={22} color={colors.primary} />
+                    <View style={styles.zoomControls}>
+                        <TouchableOpacity style={styles.controlBtn} onPress={handleZoomIn}>
+                            <ZoomIn size={22} color="#4A7C23" />
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.controlBtn, { backgroundColor: isDark ? colors.primaryLight : '#E8F5E9' }]} onPress={handleZoomOut}>
-                            <ZoomOut size={22} color={colors.primary} />
+                        <TouchableOpacity style={styles.controlBtn} onPress={handleZoomOut}>
+                            <ZoomOut size={22} color="#4A7C23" />
                         </TouchableOpacity>
                     </View>
+                </View>
+
+                {/* Controls hint */}
+                <View style={styles.controlsHint}>
+                    <Text style={styles.controlsHintText}>Swipe to Rotate | Buttons to Zoom</Text>
                 </View>
 
                 <View style={styles.fabContainer}>
@@ -663,21 +1126,29 @@ const styles = StyleSheet.create({
     },
     dayNightBtn: {
         flexDirection: 'row', alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, padding: 10, gap: 6,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4,
+        backgroundColor: '#FFD700', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, gap: 8,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 4,
     },
     dayNightBtnNight: {
         backgroundColor: '#1a1a2e',
     },
-    dayNightText: { fontSize: 12, fontWeight: '600', color: '#333' },
+    dayNightText: { fontSize: 14, fontWeight: '700', color: '#333' },
     dayNightTextNight: { color: '#FFD700' },
     zoomControls: {
         backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, padding: 6,
         shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4,
     },
     controlBtn: {
-        width: 40, height: 40, borderRadius: 20, backgroundColor: '#E8F5E9',
+        width: 44, height: 44, borderRadius: 22, backgroundColor: '#E8F5E9',
         alignItems: 'center', justifyContent: 'center', marginVertical: 3,
+    },
+    controlsHint: {
+        position: 'absolute', bottom: 180, left: 0, right: 0,
+        alignItems: 'center',
+    },
+    controlsHintText: {
+        color: 'white', fontSize: 14, fontWeight: '500',
+        textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 2, height: 2 }, textShadowRadius: 4,
     },
     fabContainer: { alignSelf: 'center', marginBottom: 100 },
     fab: {
