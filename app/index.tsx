@@ -1,19 +1,31 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { Cloud, ArrowRight } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { supabase } from '../lib/supabase';
+import { useEffect } from 'react';
 
 const { width } = Dimensions.get('window');
 
 export default function LandingScreen() {
     const router = useRouter();
 
+    useEffect(() => {
+        const checkUser = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                router.replace('/(tabs)/farm');
+            }
+        };
+        checkUser();
+    }, []);
+
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.heroSection}>
                 <View style={styles.logoContainer}>
-                    <Feather name="cloud" size={40} color="#6B8E23" />
+                    <Cloud size={40} color="#6B8E23" />
                     <Text style={styles.logoText}>FocusFarm</Text>
                 </View>
 
@@ -38,7 +50,7 @@ export default function LandingScreen() {
                     onPress={() => router.push('/signup')}
                 >
                     <Text style={styles.primaryButtonText}>Get Started</Text>
-                    <Feather name="arrow-right" size={20} color="#FFF" />
+                    <ArrowRight size={20} color="#FFF" />
                 </TouchableOpacity>
 
                 <TouchableOpacity

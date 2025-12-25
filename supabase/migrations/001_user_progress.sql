@@ -54,3 +54,11 @@ create trigger on_user_progress_updated
 
 -- Grant access to authenticated users
 grant all on public.user_progress to authenticated;
+
+
+ALTER TABLE user_progress 
+ADD COLUMN IF NOT EXISTS user_name TEXT DEFAULT 'Focus Farmer',
+ADD COLUMN IF NOT EXISTS pause_on_leave BOOLEAN DEFAULT TRUE,
+ADD COLUMN IF NOT EXISTS show_warning BOOLEAN DEFAULT TRUE,
+ADD COLUMN IF NOT EXISTS vibrate_on_leave BOOLEAN DEFAULT TRUE,
+ADD COLUMN IF NOT EXISTS dark_theme BOOLEAN DEFAULT FALSE;

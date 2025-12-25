@@ -12,7 +12,8 @@ import {
     Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Settings, Bell, Clock, Shield, Cloud, RefreshCw, Tag, Plus, X, Trash2, Moon, User, Edit2, Target } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { Settings, Bell, Clock, Shield, Cloud, RefreshCw, Tag, Plus, X, Trash2, Moon, User, Edit2, Target, LogOut } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFarm, Category } from '../../context/FarmContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -28,19 +29,15 @@ const CATEGORY_ICONS = [
 ];
 
 export default function SettingsScreen() {
-    const { state, refreshState, addCategory, deleteCategory, updateGoalTargets } = useFarm();
-    const { colors, isDark, setDarkTheme: setGlobalDarkTheme } = useTheme();
+    const router = useRouter();
+    const { state, refreshState, addCategory, deleteCategory, updateGoalTargets, setUserName, updateSettings, logout } = useFarm();
+    const { colors, setDarkTheme: setGlobalDarkTheme } = useTheme();
 
-    const [pauseOnLeave, setPauseOnLeave] = useState(true);
-    const [showWarning, setShowWarning] = useState(true);
-    const [vibrateOnLeave, setVibrateOnLeave] = useState(true);
-    const [darkTheme, setDarkTheme] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
 
     // Profile state
-    const [userName, setUserName] = useState('Focus Farmer');
     const [showProfileModal, setShowProfileModal] = useState(false);
-    const [editingName, setEditingName] = useState('');
+    const [editingName, setEditingName] = useState(state.userName);
 
     // Category modal state
     const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -59,60 +56,45 @@ export default function SettingsScreen() {
         setDailyTarget(state.dailyGoalTarget.toString());
         setWeeklyTarget(state.weeklyGoalTarget.toString());
         setMonthlyTarget(state.monthlyGoalTarget.toString());
-    }, [state.dailyGoalTarget, state.weeklyGoalTarget, state.monthlyGoalTarget]);
-
-    useEffect(() => {
-        const loadSettings = async () => {
-            try {
-                const saved = await AsyncStorage.getItem('focusSettings');
-                if (saved) {
-                    const settings = JSON.parse(saved);
-                    setPauseOnLeave(settings.pauseOnLeave ?? true);
-                    setShowWarning(settings.showWarning ?? true);
-                    setVibrateOnLeave(settings.vibrateOnLeave ?? true);
-                    setDarkTheme(settings.darkTheme ?? false);
-                    setUserName(settings.userName ?? 'Focus Farmer');
-                }
-            } catch (error) {
-                console.error('Error loading settings:', error);
-            }
-        };
-        loadSettings();
-    }, []);
-
-    const saveSettings = async (newSettings: any) => {
-        try {
-            await AsyncStorage.setItem('focusSettings', JSON.stringify(newSettings));
-        } catch (error) {
-            console.error('Error saving settings:', error);
-        }
-    };
+        setEditingName(state.userName);
+    }, [state.dailyGoalTarget, state.weeklyGoalTarget, state.monthlyGoalTarget, state.userName]);
 
     const toggleSetting = (setting: string, value: boolean) => {
-        const newSettings = {
-            pauseOnLeave: setting === 'pauseOnLeave' ? value : pauseOnLeave,
-            showWarning: setting === 'showWarning' ? value : showWarning,
-            vibrateOnLeave: setting === 'vibrateOnLeave' ? value : vibrateOnLeave,
-            darkTheme: setting === 'darkTheme' ? value : darkTheme,
-            userName,
-        };
-
-        if (setting === 'pauseOnLeave') setPauseOnLeave(value);
-        if (setting === 'showWarning') setShowWarning(value);
-        if (setting === 'vibrateOnLeave') setVibrateOnLeave(value);
+        const updates: any = {};
+        if (setting === 'pauseOnLeave') updates.pauseOnLeave = value;
+        if (setting === 'showWarning') updates.showWarning = value;
+        if (setting === 'vibrateOnLeave') updates.vibrateOnLeave = value;
         if (setting === 'darkTheme') {
-            setDarkTheme(value);
+            updates.darkTheme = value;
             setGlobalDarkTheme(value);
         }
-
-        saveSettings(newSettings);
+        updateSettings(updates);
     };
 
     const handleSaveProfile = async () => {
         if (editingName.trim()) {
-            await setUserName(editingName.trim());
+            const finalName = editingName.trim().substring(0, 9);
+            await setUserName(finalName);
         }
         setShowProfileModal(false);
+    };
+
+    const handleLogout = async () => {
+        Alert.alert(
+            'Logout',
+            'Are you sure you want to logout?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Logout',
+                    style: 'destructive',
+                    onPress: async () => {
+                        await logout();
+                        router.replace('/');
+                    }
+                }
+            ]
+        );
     };
 
     const handleSync = async () => {
@@ -175,6 +157,12 @@ export default function SettingsScreen() {
         Alert.alert('Success', 'Goal targets updated successfully!');
     };
 
+    const formatAccountAge = () => {
+        if (!state.createdAt) return '2024';
+        const date = new Date(state.createdAt);
+        return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    };
+
     const formatLastSync = () => {
         if (!state.lastSyncTime) return 'Never';
         const date = new Date(state.lastSyncTime);
@@ -197,13 +185,13 @@ export default function SettingsScreen() {
                         <User size={32} color={colors.primary} />
                     </View>
                     <View style={styles.profileInfo}>
-                        <Text style={[styles.profileName, { color: colors.text }]}>{userName}</Text>
-                        <Text style={[styles.profileSubtitle, { color: colors.textSecondary }]}>Focus Farmer since 2024</Text>
+                        <Text style={[styles.profileName, { color: colors.text }]}>{state.userName}</Text>
+                        <Text style={[styles.profileSubtitle, { color: colors.textSecondary }]}>Focus Farmer since {formatAccountAge()}</Text>
                     </View>
                     <TouchableOpacity
                         style={[styles.editButton, { backgroundColor: colors.primaryLight }]}
                         onPress={() => {
-                            setEditingName(userName);
+                            setEditingName(state.userName);
                             setShowProfileModal(true);
                         }}
                     >
@@ -325,10 +313,10 @@ export default function SettingsScreen() {
                             </View>
                         </View>
                         <Switch
-                            value={pauseOnLeave}
+                            value={state.pauseOnLeave}
                             onValueChange={(value) => toggleSetting('pauseOnLeave', value)}
                             trackColor={{ false: colors.border, true: '#A5D6A7' }}
-                            thumbColor={pauseOnLeave ? colors.primary : colors.textMuted}
+                            thumbColor={state.pauseOnLeave ? colors.primary : colors.textMuted}
                         />
                     </View>
 
@@ -343,10 +331,10 @@ export default function SettingsScreen() {
                             </View>
                         </View>
                         <Switch
-                            value={showWarning}
+                            value={state.showWarning}
                             onValueChange={(value) => toggleSetting('showWarning', value)}
                             trackColor={{ false: colors.border, true: '#A5D6A7' }}
-                            thumbColor={showWarning ? colors.primary : colors.textMuted}
+                            thumbColor={state.showWarning ? colors.primary : colors.textMuted}
                         />
                     </View>
 
@@ -361,10 +349,10 @@ export default function SettingsScreen() {
                             </View>
                         </View>
                         <Switch
-                            value={vibrateOnLeave}
+                            value={state.vibrateOnLeave}
                             onValueChange={(value) => toggleSetting('vibrateOnLeave', value)}
                             trackColor={{ false: colors.border, true: '#A5D6A7' }}
-                            thumbColor={vibrateOnLeave ? colors.primary : colors.textMuted}
+                            thumbColor={state.vibrateOnLeave ? colors.primary : colors.textMuted}
                         />
                     </View>
                 </View>
@@ -381,12 +369,24 @@ export default function SettingsScreen() {
                             </View>
                         </View>
                         <Switch
-                            value={darkTheme}
+                            value={state.darkTheme}
                             onValueChange={(value) => toggleSetting('darkTheme', value)}
                             trackColor={{ false: colors.border, true: '#A5D6A7' }}
-                            thumbColor={darkTheme ? colors.primary : colors.textMuted}
+                            thumbColor={state.darkTheme ? colors.primary : colors.textMuted}
                         />
                     </View>
+
+                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+                    <TouchableOpacity style={styles.settingRow} onPress={handleLogout}>
+                        <View style={styles.settingInfo}>
+                            <LogOut size={20} color="#D32F2F" />
+                            <View style={styles.settingText}>
+                                <Text style={[styles.settingLabel, { color: '#D32F2F' }]}>Logout</Text>
+                                <Text style={[styles.settingDesc, { color: colors.textSecondary }]}>Sign out of your account</Text>
+                            </View>
+                        </View>
+                    </TouchableOpacity>
                 </View>
             </ScrollView>
 
@@ -405,6 +405,7 @@ export default function SettingsScreen() {
                             value={editingName}
                             onChangeText={setEditingName}
                             placeholder="Enter your name"
+                            maxLength={9}
                         />
                         <TouchableOpacity style={[styles.modalButton, { backgroundColor: colors.primary }]} onPress={handleSaveProfile}>
                             <Text style={styles.modalButtonText}>Save</Text>

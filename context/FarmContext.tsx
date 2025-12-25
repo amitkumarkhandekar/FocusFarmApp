@@ -35,6 +35,11 @@ interface FarmState {
     weeklyGoalClaimed: boolean;
     monthlyGoalClaimed: boolean;
     userName: string;
+    createdAt: string;
+    pauseOnLeave: boolean;
+    showWarning: boolean;
+    vibrateOnLeave: boolean;
+    darkTheme: boolean;
 }
 
 interface FarmContextType {
@@ -61,6 +66,8 @@ interface FarmContextType {
     deleteCategory: (id: string) => Promise<void>;
     updateGoalTargets: (daily: number, weekly: number, monthly: number) => Promise<void>;
     setUserName: (name: string) => Promise<void>;
+    updateSettings: (settings: Partial<Pick<FarmState, 'pauseOnLeave' | 'showWarning' | 'vibrateOnLeave' | 'darkTheme'>>) => Promise<void>;
+    logout: () => Promise<void>;
 }
 
 const defaultState: FarmState = {
@@ -79,6 +86,11 @@ const defaultState: FarmState = {
     weeklyGoalClaimed: false,
     monthlyGoalClaimed: false,
     userName: 'Focus Farmer',
+    createdAt: new Date().toISOString(),
+    pauseOnLeave: true,
+    showWarning: true,
+    vibrateOnLeave: true,
+    darkTheme: false,
 };
 
 const FarmContext = createContext<FarmContextType | undefined>(undefined);
@@ -178,6 +190,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
     const loadStateFromSupabase = async (uid: string) => {
         try {
+            const { data: { user } } = await supabase.auth.getUser();
+            const userEmail = user?.email;
             const today = new Date().toDateString();
 
             // First, check if user exists
@@ -214,6 +228,12 @@ export function FarmProvider({ children }: { children: ReactNode }) {
                         dailyGoalClaimed: false,
                         isLoading: false,
                         lastSyncTime: new Date().toISOString(),
+                        userName: newUser.user_name || (userEmail ? userEmail.split('@')[0].substring(0, 9) : 'Farmer'),
+                        createdAt: newUser.created_at || prev.createdAt,
+                        pauseOnLeave: newUser.pause_on_leave ?? prev.pauseOnLeave,
+                        showWarning: newUser.show_warning ?? prev.showWarning,
+                        vibrateOnLeave: newUser.vibrate_on_leave ?? prev.vibrateOnLeave,
+                        darkTheme: newUser.dark_theme ?? prev.darkTheme,
                     }));
                     console.log('🎁 Welcome gift given to new user: 1 Hen, 1 Goat, 1 Cow!');
                     return;
@@ -244,6 +264,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
                         dailyGoalClaimed: false,
                         isLoading: false,
                         lastSyncTime: new Date().toISOString(),
+                        userName: existingUser.user_name || prev.userName,
+                        createdAt: existingUser.created_at || prev.createdAt,
                     }));
                 } else {
                     setState(prev => ({
@@ -256,6 +278,12 @@ export function FarmProvider({ children }: { children: ReactNode }) {
                         dailyGoalClaimed: existingUser.daily_goal_claimed,
                         isLoading: false,
                         lastSyncTime: new Date().toISOString(),
+                        userName: existingUser.user_name || (userEmail ? userEmail.split('@')[0].substring(0, 9) : 'Farmer'),
+                        createdAt: existingUser.created_at || prev.createdAt,
+                        pauseOnLeave: existingUser.pause_on_leave ?? prev.pauseOnLeave,
+                        showWarning: existingUser.show_warning ?? prev.showWarning,
+                        vibrateOnLeave: existingUser.vibrate_on_leave ?? prev.vibrateOnLeave,
+                        darkTheme: existingUser.dark_theme ?? prev.darkTheme,
                     }));
                 }
                 return;
@@ -276,6 +304,11 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         today_minutes: number;
         last_day_reset: string;
         daily_goal_claimed: boolean;
+        user_name: string;
+        pause_on_leave: boolean;
+        show_warning: boolean;
+        vibrate_on_leave: boolean;
+        dark_theme: boolean;
     }>) => {
         if (!userId) return;
 
@@ -310,7 +343,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
     };
 
     const claimDailyReward = () => {
-        if (state.todayMinutes >= 360 && !state.dailyGoalClaimed) {
+        const targetMinutes = state.dailyGoalTarget * 60;
+        if (state.todayMinutes >= targetMinutes && !state.dailyGoalClaimed) {
             const newHens = state.hens + 1;
             setState(prev => ({
                 ...prev,
@@ -555,8 +589,37 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             const settings = saved ? JSON.parse(saved) : {};
             settings.userName = name;
             await AsyncStorage.setItem('focusSettings', JSON.stringify(settings));
+
+            // Sync to Supabase
+            await saveToSupabase({ user_name: name });
         } catch (error) {
             console.error('Error saving user name:', error);
+        }
+    };
+
+    const updateSettings = async (updates: Partial<Pick<FarmState, 'pauseOnLeave' | 'showWarning' | 'vibrateOnLeave' | 'darkTheme'>>) => {
+        setState(prev => ({ ...prev, ...updates }));
+
+        const dbUpdates: any = {};
+        if (updates.pauseOnLeave !== undefined) dbUpdates.pause_on_leave = updates.pauseOnLeave;
+        if (updates.showWarning !== undefined) dbUpdates.show_warning = updates.showWarning;
+        if (updates.vibrateOnLeave !== undefined) dbUpdates.vibrate_on_leave = updates.vibrateOnLeave;
+        if (updates.darkTheme !== undefined) dbUpdates.dark_theme = updates.darkTheme;
+
+        await saveToSupabase(dbUpdates);
+    };
+
+    const logout = async () => {
+        try {
+            await supabase.auth.signOut();
+            // Clear AsyncStorage keys that shouldn't persist
+            const keysToClear = ['focusSettings'];
+            await AsyncStorage.multiRemove(keysToClear);
+        } catch (err) {
+            console.error('Logout error:', err);
+        } finally {
+            setUserId(null);
+            setState({ ...defaultState, isLoading: false });
         }
     };
 
@@ -579,6 +642,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             deleteCategory,
             updateGoalTargets,
             setUserName,
+            updateSettings,
+            logout,
         }}>
             {children}
         </FarmContext.Provider>

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
-import { Feather } from '@expo/vector-icons';
+import { ChevronLeft, User, Mail, Lock } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function SignUpScreen() {
@@ -64,7 +64,7 @@ export default function SignUpScreen() {
             >
                 <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
                     <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-                        <Feather name="chevron-left" size={24} color="#2D4A22" />
+                        <ChevronLeft size={24} color="#2D4A22" />
                     </TouchableOpacity>
 
                     <View style={styles.header}>
@@ -74,7 +74,7 @@ export default function SignUpScreen() {
 
                     <View style={styles.form}>
                         <View style={styles.inputContainer}>
-                            <Feather name="user" size={20} color="#556B2F" style={styles.inputIcon} />
+                            <User size={20} color="#556B2F" style={styles.inputIcon} />
                             <TextInput
                                 style={styles.input}
                                 placeholder="Farmer Name (Username)"
@@ -85,7 +85,7 @@ export default function SignUpScreen() {
                         </View>
 
                         <View style={styles.inputContainer}>
-                            <Feather name="mail" size={20} color="#556B2F" style={styles.inputIcon} />
+                            <Mail size={20} color="#556B2F" style={styles.inputIcon} />
                             <TextInput
                                 style={styles.input}
                                 placeholder="Email Address"
@@ -98,7 +98,7 @@ export default function SignUpScreen() {
                         </View>
 
                         <View style={styles.inputContainer}>
-                            <Feather name="lock" size={20} color="#556B2F" style={styles.inputIcon} />
+                            <Lock size={20} color="#556B2F" style={styles.inputIcon} />
                             <TextInput
                                 style={styles.input}
                                 placeholder="Secure Password"
