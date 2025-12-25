@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface StudySession {
     id: string;
@@ -28,12 +29,20 @@ interface FarmState {
     isLoading: boolean;
     lastSyncTime: string | null;
     categories: Category[];
+    dailyGoalTarget: number;
+    weeklyGoalTarget: number;
+    monthlyGoalTarget: number;
+    weeklyGoalClaimed: boolean;
+    monthlyGoalClaimed: boolean;
+    userName: string;
 }
 
 interface FarmContextType {
     state: FarmState;
     addStudyTime: (minutes: number) => void;
     claimDailyReward: () => void;
+    claimWeeklyReward: () => Promise<void>;
+    claimMonthlyReward: () => Promise<void>;
     convertHensToGoat: () => Promise<boolean>;
     convertHensToCow: () => Promise<boolean>;
     applyPenalty: (hensToLose: number) => void;
@@ -50,6 +59,8 @@ interface FarmContextType {
     getCategories: () => Promise<Category[]>;
     addCategory: (name: string, color: string, icon: string) => Promise<Category | null>;
     deleteCategory: (id: string) => Promise<void>;
+    updateGoalTargets: (daily: number, weekly: number, monthly: number) => Promise<void>;
+    setUserName: (name: string) => Promise<void>;
 }
 
 const defaultState: FarmState = {
@@ -62,6 +73,12 @@ const defaultState: FarmState = {
     isLoading: true,
     lastSyncTime: null,
     categories: [],
+    dailyGoalTarget: 6, // 6 hours default
+    weeklyGoalTarget: 40, // 40 hours default
+    monthlyGoalTarget: 160, // 160 hours default
+    weeklyGoalClaimed: false,
+    monthlyGoalClaimed: false,
+    userName: 'Focus Farmer',
 };
 
 const FarmContext = createContext<FarmContextType | undefined>(undefined);
@@ -77,6 +94,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
                 setUserId(user.id);
                 await loadStateFromSupabase(user.id);
                 await loadCategories(user.id);
+                await loadGoalTargets();
+                await loadClaimStatuses();
             } else {
                 setState(prev => ({ ...prev, isLoading: false }));
             }
@@ -89,6 +108,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
                 setUserId(session.user.id);
                 await loadStateFromSupabase(session.user.id);
                 await loadCategories(session.user.id);
+                await loadGoalTargets();
+                await loadClaimStatuses();
             } else {
                 setUserId(null);
                 setState({ ...defaultState, isLoading: false });
@@ -111,6 +132,47 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             }
         } catch (error) {
             console.error('Error loading categories:', error);
+        }
+    };
+
+    const loadGoalTargets = async () => {
+        try {
+            const saved = await AsyncStorage.getItem('focusSettings');
+            if (saved) {
+                const settings = JSON.parse(saved);
+                setState(prev => ({
+                    ...prev,
+                    dailyGoalTarget: settings.dailyGoalTarget ?? 6,
+                    weeklyGoalTarget: settings.weeklyGoalTarget ?? 40,
+                    monthlyGoalTarget: settings.monthlyGoalTarget ?? 160,
+                    userName: settings.userName ?? 'Focus Farmer',
+                }));
+            }
+        } catch (error) {
+            console.error('Error loading settings:', error);
+        }
+    };
+
+    const loadClaimStatuses = async () => {
+        try {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const week = Math.floor(now.getDate() / 7); // Simple week estimation
+
+            const weeklyKey = `weeklyGoalClaimed_${year}_${week}`;
+            const monthlyKey = `monthlyGoalClaimed_${year}_${month}`;
+
+            const weeklyClaimed = await AsyncStorage.getItem(weeklyKey);
+            const monthlyClaimed = await AsyncStorage.getItem(monthlyKey);
+
+            setState(prev => ({
+                ...prev,
+                weeklyGoalClaimed: !!weeklyClaimed,
+                monthlyGoalClaimed: !!monthlyClaimed,
+            }));
+        } catch (error) {
+            console.error('Error loading claim statuses:', error);
         }
     };
 
@@ -428,11 +490,83 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    const updateGoalTargets = async (daily: number, weekly: number, monthly: number) => {
+        setState(prev => ({
+            ...prev,
+            dailyGoalTarget: daily,
+            weeklyGoalTarget: weekly,
+            monthlyGoalTarget: monthly,
+        }));
+
+        try {
+            const saved = await AsyncStorage.getItem('focusSettings');
+            const settings = saved ? JSON.parse(saved) : {};
+            settings.dailyGoalTarget = daily;
+            settings.weeklyGoalTarget = weekly;
+            settings.monthlyGoalTarget = monthly;
+            await AsyncStorage.setItem('focusSettings', JSON.stringify(settings));
+        } catch (error) {
+            console.error('Error saving goal targets:', error);
+        }
+    };
+
+    const claimWeeklyReward = async () => {
+        if (state.weeklyGoalClaimed) return;
+
+        const now = new Date();
+        const year = now.getFullYear();
+        const week = Math.floor(now.getDate() / 7);
+        const weeklyKey = `weeklyGoalClaimed_${year}_${week}`;
+
+        const newGoats = state.goats + 1;
+        setState(prev => ({
+            ...prev,
+            goats: newGoats,
+            weeklyGoalClaimed: true,
+        }));
+
+        await AsyncStorage.setItem(weeklyKey, 'true');
+        await saveToSupabase({ goats: newGoats });
+    };
+
+    const claimMonthlyReward = async () => {
+        if (state.monthlyGoalClaimed) return;
+
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+        const monthlyKey = `monthlyGoalClaimed_${year}_${month}`;
+
+        const newCows = state.cows + 1;
+        setState(prev => ({
+            ...prev,
+            cows: newCows,
+            monthlyGoalClaimed: true,
+        }));
+
+        await AsyncStorage.setItem(monthlyKey, 'true');
+        await saveToSupabase({ cows: newCows });
+    };
+
+    const setUserName = async (name: string) => {
+        setState(prev => ({ ...prev, userName: name }));
+        try {
+            const saved = await AsyncStorage.getItem('focusSettings');
+            const settings = saved ? JSON.parse(saved) : {};
+            settings.userName = name;
+            await AsyncStorage.setItem('focusSettings', JSON.stringify(settings));
+        } catch (error) {
+            console.error('Error saving user name:', error);
+        }
+    };
+
     return (
         <FarmContext.Provider value={{
             state,
             addStudyTime,
             claimDailyReward,
+            claimWeeklyReward,
+            claimMonthlyReward,
             convertHensToGoat,
             convertHensToCow,
             applyPenalty,
@@ -443,6 +577,8 @@ export function FarmProvider({ children }: { children: ReactNode }) {
             getCategories,
             addCategory,
             deleteCategory,
+            updateGoalTargets,
+            setUserName,
         }}>
             {children}
         </FarmContext.Provider>

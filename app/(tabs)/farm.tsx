@@ -10,26 +10,39 @@ import { useFarm } from '../../context/FarmContext';
 import { useTheme } from '../../context/ThemeContext';
 
 // ============================================
-// CREATE COW - Realistic with spots
+// CREATE COW - Ultra Realistic with full details
 // ============================================
 function createCow(): THREE.Group {
     const cow = new THREE.Group();
 
-    // Body
-    const bodyGeometry = new THREE.BoxGeometry(2, 1.8, 4);
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 });
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xfaf8f5, roughness: 0.8 });
+    const spotMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+    const pinkMaterial = new THREE.MeshStandardMaterial({ color: 0xffb6c1, roughness: 0.6 });
+    const darkMaterial = new THREE.MeshStandardMaterial({ color: 0x2a2a2a });
+    const hoofMaterial = new THREE.MeshStandardMaterial({ color: 0x3d3d3d, roughness: 0.4 });
+
+    // Main Body - barrel shaped
+    const bodyGeometry = new THREE.BoxGeometry(2.2, 2, 4.5);
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    body.position.y = 2;
+    body.position.y = 2.2;
     body.castShadow = true;
     body.receiveShadow = true;
     cow.add(body);
 
-    // Spots
-    const spotMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+    // Body underside (belly)
+    const bellyGeometry = new THREE.BoxGeometry(1.8, 0.6, 3.8);
+    const belly = new THREE.Mesh(bellyGeometry, bodyMaterial);
+    belly.position.set(0, 1.1, 0);
+    cow.add(belly);
+
+    // Spots - more realistic pattern
     const spots = [
-        { pos: [0.5, 2.5, 1], size: [0.6, 0.5, 0.3] },
-        { pos: [-0.7, 2.3, -0.5], size: [0.8, 0.6, 0.3] },
-        { pos: [0.3, 2.1, -1.5], size: [0.5, 0.4, 0.3] }
+        { pos: [0.6, 2.8, 1.2], size: [0.8, 0.7, 0.4] },
+        { pos: [-0.8, 2.5, -0.3], size: [1.0, 0.8, 0.4] },
+        { pos: [0.4, 2.3, -1.8], size: [0.7, 0.6, 0.4] },
+        { pos: [-0.5, 2.9, 0.8], size: [0.5, 0.5, 0.4] },
+        { pos: [0.7, 1.8, -0.8], size: [0.6, 0.5, 0.4] },
+        { pos: [-0.3, 2.1, 1.5], size: [0.9, 0.7, 0.4] }
     ];
     spots.forEach(spot => {
         const spotGeo = new THREE.BoxGeometry(spot.size[0], spot.size[1], spot.size[2]);
@@ -39,129 +52,329 @@ function createCow(): THREE.Group {
         cow.add(spotMesh);
     });
 
-    // Head
-    const headGeometry = new THREE.BoxGeometry(1.2, 1.2, 1.5);
+    // Neck
+    const neckGeometry = new THREE.BoxGeometry(1.0, 1.2, 1.0);
+    const neck = new THREE.Mesh(neckGeometry, bodyMaterial);
+    neck.position.set(0, 2.8, 2.2);
+    neck.rotation.x = -0.2;
+    cow.add(neck);
+
+    // Head - more detailed
+    const headGeometry = new THREE.BoxGeometry(1.3, 1.3, 1.6);
     const head = new THREE.Mesh(headGeometry, bodyMaterial);
-    head.position.set(0, 2.5, 2.3);
+    head.position.set(0, 2.8, 3.0);
     head.castShadow = true;
     head.name = 'head';
     cow.add(head);
 
-    // Snout
-    const snoutGeometry = new THREE.BoxGeometry(0.8, 0.6, 0.4);
-    const snoutMaterial = new THREE.MeshStandardMaterial({ color: 0xffccbb });
-    const snout = new THREE.Mesh(snoutGeometry, snoutMaterial);
-    snout.position.set(0, 2.2, 3);
+    // Face spot on head
+    const faceSpot = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.3), spotMaterial);
+    faceSpot.position.set(-0.2, 3.1, 3.5);
+    cow.add(faceSpot);
+
+    // Snout/Muzzle - larger and pink
+    const snoutGeometry = new THREE.BoxGeometry(1.0, 0.7, 0.5);
+    const snout = new THREE.Mesh(snoutGeometry, pinkMaterial);
+    snout.position.set(0, 2.4, 3.7);
     cow.add(snout);
 
-    // Horns
-    const hornGeometry = new THREE.BoxGeometry(0.15, 0.6, 0.15);
-    const hornMaterial = new THREE.MeshStandardMaterial({ color: 0x4a4a4a });
+    // Nostrils
+    const nostrilGeometry = new THREE.SphereGeometry(0.12, 8, 8);
+    const nostril1 = new THREE.Mesh(nostrilGeometry, darkMaterial);
+    nostril1.position.set(0.25, 2.5, 3.95);
+    cow.add(nostril1);
+    const nostril2 = nostril1.clone();
+    nostril2.position.x = -0.25;
+    cow.add(nostril2);
+
+    // Eyes - with pupils
+    const eyeWhiteGeometry = new THREE.SphereGeometry(0.18, 12, 12);
+    const eyeWhiteMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    const eyePupilGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+    const eyePupilMaterial = new THREE.MeshStandardMaterial({ color: 0x1a0a00 });
+
+    // Right eye
+    const eyeWhite1 = new THREE.Mesh(eyeWhiteGeometry, eyeWhiteMaterial);
+    eyeWhite1.position.set(0.5, 3.0, 3.4);
+    cow.add(eyeWhite1);
+    const eyePupil1 = new THREE.Mesh(eyePupilGeometry, eyePupilMaterial);
+    eyePupil1.position.set(0.5, 3.0, 3.55);
+    cow.add(eyePupil1);
+
+    // Left eye
+    const eyeWhite2 = new THREE.Mesh(eyeWhiteGeometry, eyeWhiteMaterial);
+    eyeWhite2.position.set(-0.5, 3.0, 3.4);
+    cow.add(eyeWhite2);
+    const eyePupil2 = new THREE.Mesh(eyePupilGeometry, eyePupilMaterial);
+    eyePupil2.position.set(-0.5, 3.0, 3.55);
+    cow.add(eyePupil2);
+
+    // Horns - curved
+    const hornGeometry = new THREE.ConeGeometry(0.12, 0.7, 8);
+    const hornMaterial = new THREE.MeshStandardMaterial({ color: 0xd4c4a8, roughness: 0.5 });
     const horn1 = new THREE.Mesh(hornGeometry, hornMaterial);
-    horn1.position.set(0.4, 3.3, 2.5);
-    horn1.rotation.z = 0.3;
+    horn1.position.set(0.5, 3.6, 2.8);
+    horn1.rotation.z = 0.4;
+    horn1.rotation.x = -0.2;
     cow.add(horn1);
     const horn2 = horn1.clone();
-    horn2.position.x = -0.4;
-    horn2.rotation.z = -0.3;
+    horn2.position.x = -0.5;
+    horn2.rotation.z = -0.4;
     cow.add(horn2);
 
-    // Ears
-    const earGeometry = new THREE.BoxGeometry(0.3, 0.5, 0.2);
+    // Ears - floppy
+    const earGeometry = new THREE.BoxGeometry(0.15, 0.25, 0.5);
     const ear1 = new THREE.Mesh(earGeometry, bodyMaterial);
-    ear1.position.set(0.5, 3, 2);
+    ear1.position.set(0.65, 3.1, 2.6);
+    ear1.rotation.z = 0.8;
+    ear1.rotation.y = 0.3;
     cow.add(ear1);
     const ear2 = ear1.clone();
-    ear2.position.x = -0.5;
+    ear2.position.x = -0.65;
+    ear2.rotation.z = -0.8;
+    ear2.rotation.y = -0.3;
     cow.add(ear2);
 
-    // Legs
-    const legGeometry = new THREE.BoxGeometry(0.4, 1.8, 0.4);
-    const legPositions = [[-0.6, 0.9, 1.2], [0.6, 0.9, 1.2], [-0.6, 0.9, -1.2], [0.6, 0.9, -1.2]];
+    // Ear inner pink
+    const earInnerGeometry = new THREE.BoxGeometry(0.08, 0.15, 0.35);
+    const earInner1 = new THREE.Mesh(earInnerGeometry, pinkMaterial);
+    earInner1.position.set(0.65, 3.1, 2.65);
+    earInner1.rotation.z = 0.8;
+    cow.add(earInner1);
+    const earInner2 = earInner1.clone();
+    earInner2.position.x = -0.65;
+    earInner2.rotation.z = -0.8;
+    cow.add(earInner2);
+
+    // Legs with joints and hooves
+    const upperLegGeometry = new THREE.BoxGeometry(0.45, 1.2, 0.45);
+    const lowerLegGeometry = new THREE.BoxGeometry(0.35, 1.0, 0.35);
+    const hoofGeometry = new THREE.BoxGeometry(0.4, 0.25, 0.45);
+
+    const legPositions = [
+        { upper: [-0.7, 1.5, 1.5], lower: [-0.7, 0.6, 1.5], hoof: [-0.7, 0.12, 1.5] },
+        { upper: [0.7, 1.5, 1.5], lower: [0.7, 0.6, 1.5], hoof: [0.7, 0.12, 1.5] },
+        { upper: [-0.7, 1.5, -1.5], lower: [-0.7, 0.6, -1.5], hoof: [-0.7, 0.12, -1.5] },
+        { upper: [0.7, 1.5, -1.5], lower: [0.7, 0.6, -1.5], hoof: [0.7, 0.12, -1.5] }
+    ];
+
     legPositions.forEach((pos, idx) => {
-        const leg = new THREE.Mesh(legGeometry, bodyMaterial);
-        leg.position.set(pos[0], pos[1], pos[2]);
-        leg.castShadow = true;
-        leg.name = `leg${idx}`;
-        cow.add(leg);
+        const upperLeg = new THREE.Mesh(upperLegGeometry, bodyMaterial);
+        upperLeg.position.set(pos.upper[0], pos.upper[1], pos.upper[2]);
+        upperLeg.castShadow = true;
+        cow.add(upperLeg);
+
+        const lowerLeg = new THREE.Mesh(lowerLegGeometry, bodyMaterial);
+        lowerLeg.position.set(pos.lower[0], pos.lower[1], pos.lower[2]);
+        lowerLeg.castShadow = true;
+        lowerLeg.name = `leg${idx}`;
+        cow.add(lowerLeg);
+
+        const hoof = new THREE.Mesh(hoofGeometry, hoofMaterial);
+        hoof.position.set(pos.hoof[0], pos.hoof[1], pos.hoof[2]);
+        hoof.castShadow = true;
+        cow.add(hoof);
     });
 
-    // Tail
-    const tailGeometry = new THREE.BoxGeometry(0.1, 1.5, 0.1);
+    // Udder
+    const udderGeometry = new THREE.SphereGeometry(0.4, 12, 12);
+    const udder = new THREE.Mesh(udderGeometry, pinkMaterial);
+    udder.position.set(0, 0.9, -0.8);
+    udder.scale.set(1, 0.8, 1.2);
+    cow.add(udder);
+
+    // Teats
+    const teatGeometry = new THREE.CylinderGeometry(0.06, 0.08, 0.2, 8);
+    const teatPositions = [[-0.15, 0.55, -0.65], [0.15, 0.55, -0.65], [-0.15, 0.55, -0.95], [0.15, 0.55, -0.95]];
+    teatPositions.forEach(pos => {
+        const teat = new THREE.Mesh(teatGeometry, pinkMaterial);
+        teat.position.set(pos[0], pos[1], pos[2]);
+        cow.add(teat);
+    });
+
+    // Tail - with tuft
+    const tailGeometry = new THREE.BoxGeometry(0.12, 1.6, 0.12);
     const tail = new THREE.Mesh(tailGeometry, bodyMaterial);
-    tail.position.set(1, 1.5, -2);
-    tail.rotation.z = 0.3;
+    tail.position.set(0, 1.8, -2.3);
+    tail.rotation.x = 0.3;
     tail.name = 'tail';
     cow.add(tail);
+
+    // Tail tuft
+    const tuftGeometry = new THREE.SphereGeometry(0.2, 8, 8);
+    const tuft = new THREE.Mesh(tuftGeometry, spotMaterial);
+    tuft.position.set(0, 0.9, -2.5);
+    cow.add(tuft);
 
     return cow;
 }
 
 // ============================================
-// CREATE GOAT - Brown with beard and horns
+// CREATE GOAT - Ultra Realistic with full details
 // ============================================
 function createGoat(): THREE.Group {
     const goat = new THREE.Group();
 
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xb8956a, roughness: 0.8 });
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xc9a87c, roughness: 0.9 });
+    const darkFurMaterial = new THREE.MeshStandardMaterial({ color: 0x8b7355, roughness: 0.9 });
+    const hornMaterial = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.3 });
+    const hoofMaterial = new THREE.MeshStandardMaterial({ color: 0x2d2d2d, roughness: 0.4 });
+    const pinkMaterial = new THREE.MeshStandardMaterial({ color: 0xffb6c1, roughness: 0.6 });
+    const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0xffd700 }); // Goat eyes are golden
 
-    // Body
-    const bodyGeometry = new THREE.BoxGeometry(1.2, 1.4, 2.5);
+    // Main Body
+    const bodyGeometry = new THREE.BoxGeometry(1.4, 1.5, 2.8);
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    body.position.y = 1.5;
+    body.position.y = 1.6;
     body.castShadow = true;
+    body.receiveShadow = true;
     goat.add(body);
 
+    // Chest - front of body
+    const chestGeometry = new THREE.BoxGeometry(1.2, 1.3, 0.8);
+    const chest = new THREE.Mesh(chestGeometry, bodyMaterial);
+    chest.position.set(0, 1.7, 1.2);
+    goat.add(chest);
+
+    // Neck
+    const neckGeometry = new THREE.BoxGeometry(0.8, 1.0, 0.7);
+    const neck = new THREE.Mesh(neckGeometry, bodyMaterial);
+    neck.position.set(0, 2.4, 1.5);
+    neck.rotation.x = -0.3;
+    goat.add(neck);
+
     // Head
-    const headGeometry = new THREE.BoxGeometry(0.9, 0.9, 1);
+    const headGeometry = new THREE.BoxGeometry(0.9, 1.0, 1.2);
     const head = new THREE.Mesh(headGeometry, bodyMaterial);
-    head.position.set(0, 2.2, 1.5);
+    head.position.set(0, 2.5, 2.0);
     head.castShadow = true;
     head.name = 'head';
     goat.add(head);
 
-    // Beard
-    const beardGeometry = new THREE.BoxGeometry(0.7, 0.4, 0.2);
-    const beard = new THREE.Mesh(beardGeometry, bodyMaterial);
-    beard.position.set(0, 1.8, 2);
-    goat.add(beard);
+    // Snout/Muzzle
+    const snoutGeometry = new THREE.BoxGeometry(0.6, 0.5, 0.6);
+    const snout = new THREE.Mesh(snoutGeometry, bodyMaterial);
+    snout.position.set(0, 2.2, 2.5);
+    goat.add(snout);
 
-    // Horns
-    const hornGeometry = new THREE.BoxGeometry(0.12, 0.8, 0.12);
-    const hornMaterial = new THREE.MeshStandardMaterial({ color: 0x3a3a3a });
-    const horn1 = new THREE.Mesh(hornGeometry, hornMaterial);
-    horn1.position.set(0.3, 2.8, 1.3);
-    horn1.rotation.z = 0.4;
+    // Nose
+    const noseGeometry = new THREE.BoxGeometry(0.35, 0.25, 0.15);
+    const nose = new THREE.Mesh(noseGeometry, pinkMaterial);
+    nose.position.set(0, 2.15, 2.8);
+    goat.add(nose);
+
+    // Nostrils
+    const nostrilGeometry = new THREE.SphereGeometry(0.06, 8, 8);
+    const nostrilMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+    const nostril1 = new THREE.Mesh(nostrilGeometry, nostrilMaterial);
+    nostril1.position.set(0.1, 2.15, 2.88);
+    goat.add(nostril1);
+    const nostril2 = nostril1.clone();
+    nostril2.position.x = -0.1;
+    goat.add(nostril2);
+
+    // Eyes - horizontal rectangular pupils like real goats
+    const eyeWhiteGeometry = new THREE.SphereGeometry(0.14, 12, 12);
+    const eyeWhiteMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    const eyePupilGeometry = new THREE.BoxGeometry(0.12, 0.05, 0.05);
+    const eyePupilMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
+
+    // Right eye
+    const eyeWhite1 = new THREE.Mesh(eyeWhiteGeometry, eyeMaterial);
+    eyeWhite1.position.set(0.35, 2.65, 2.35);
+    goat.add(eyeWhite1);
+    const eyePupil1 = new THREE.Mesh(eyePupilGeometry, eyePupilMaterial);
+    eyePupil1.position.set(0.35, 2.65, 2.45);
+    goat.add(eyePupil1);
+
+    // Left eye
+    const eyeWhite2 = new THREE.Mesh(eyeWhiteGeometry, eyeMaterial);
+    eyeWhite2.position.set(-0.35, 2.65, 2.35);
+    goat.add(eyeWhite2);
+    const eyePupil2 = new THREE.Mesh(eyePupilGeometry, eyePupilMaterial);
+    eyePupil2.position.set(-0.35, 2.65, 2.45);
+    goat.add(eyePupil2);
+
+    // Beard - multiple strands
+    const beardMaterial = new THREE.MeshStandardMaterial({ color: 0x6b5344, roughness: 1 });
+    const beardGeometry1 = new THREE.BoxGeometry(0.15, 0.5, 0.1);
+    const beard1 = new THREE.Mesh(beardGeometry1, beardMaterial);
+    beard1.position.set(0, 1.85, 2.45);
+    goat.add(beard1);
+    const beard2 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.4, 0.08), beardMaterial);
+    beard2.position.set(0.1, 1.9, 2.4);
+    goat.add(beard2);
+    const beard3 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.35, 0.08), beardMaterial);
+    beard3.position.set(-0.1, 1.95, 2.4);
+    goat.add(beard3);
+
+    // Horns - curved backwards
+    const horn1 = new THREE.Group();
+    const hornSegment1 = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.5, 8), hornMaterial);
+    hornSegment1.position.y = 0.25;
+    horn1.add(hornSegment1);
+    const hornSegment2 = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.4, 8), hornMaterial);
+    hornSegment2.position.set(0, 0.55, -0.15);
+    hornSegment2.rotation.x = 0.5;
+    horn1.add(hornSegment2);
+    horn1.position.set(0.3, 3.0, 1.8);
+    horn1.rotation.z = 0.3;
+    horn1.rotation.x = -0.3;
     goat.add(horn1);
+
     const horn2 = horn1.clone();
     horn2.position.x = -0.3;
-    horn2.rotation.z = -0.4;
+    horn2.rotation.z = -0.3;
     goat.add(horn2);
 
-    // Ears
-    const earGeometry = new THREE.BoxGeometry(0.25, 0.4, 0.15);
+    // Ears - floppy
+    const earGeometry = new THREE.BoxGeometry(0.12, 0.2, 0.4);
     const ear1 = new THREE.Mesh(earGeometry, bodyMaterial);
-    ear1.position.set(0.4, 2.6, 1.5);
+    ear1.position.set(0.45, 2.7, 1.85);
+    ear1.rotation.z = 1.0;
+    ear1.rotation.y = 0.3;
     goat.add(ear1);
     const ear2 = ear1.clone();
-    ear2.position.x = -0.4;
+    ear2.position.x = -0.45;
+    ear2.rotation.z = -1.0;
+    ear2.rotation.y = -0.3;
     goat.add(ear2);
 
-    // Legs
-    const legGeometry = new THREE.BoxGeometry(0.25, 1.4, 0.25);
-    const legPositions = [[-0.35, 0.7, 0.8], [0.35, 0.7, 0.8], [-0.35, 0.7, -0.8], [0.35, 0.7, -0.8]];
+    // Legs with hooves
+    const upperLegGeometry = new THREE.BoxGeometry(0.3, 0.8, 0.3);
+    const lowerLegGeometry = new THREE.BoxGeometry(0.22, 0.7, 0.22);
+    const hoofGeometry = new THREE.BoxGeometry(0.25, 0.2, 0.3);
+
+    const legPositions = [
+        { upper: [-0.4, 1.0, 1.0], lower: [-0.4, 0.4, 1.0], hoof: [-0.4, 0.1, 1.0] },
+        { upper: [0.4, 1.0, 1.0], lower: [0.4, 0.4, 1.0], hoof: [0.4, 0.1, 1.0] },
+        { upper: [-0.4, 1.0, -1.0], lower: [-0.4, 0.4, -1.0], hoof: [-0.4, 0.1, -1.0] },
+        { upper: [0.4, 1.0, -1.0], lower: [0.4, 0.4, -1.0], hoof: [0.4, 0.1, -1.0] }
+    ];
+
     legPositions.forEach((pos, idx) => {
-        const leg = new THREE.Mesh(legGeometry, bodyMaterial);
-        leg.position.set(pos[0], pos[1], pos[2]);
-        leg.castShadow = true;
-        leg.name = `leg${idx}`;
-        goat.add(leg);
+        const upperLeg = new THREE.Mesh(upperLegGeometry, bodyMaterial);
+        upperLeg.position.set(pos.upper[0], pos.upper[1], pos.upper[2]);
+        upperLeg.castShadow = true;
+        goat.add(upperLeg);
+
+        const lowerLeg = new THREE.Mesh(lowerLegGeometry, darkFurMaterial);
+        lowerLeg.position.set(pos.lower[0], pos.lower[1], pos.lower[2]);
+        lowerLeg.castShadow = true;
+        lowerLeg.name = `leg${idx}`;
+        goat.add(lowerLeg);
+
+        const hoof = new THREE.Mesh(hoofGeometry, hoofMaterial);
+        hoof.position.set(pos.hoof[0], pos.hoof[1], pos.hoof[2]);
+        hoof.castShadow = true;
+        goat.add(hoof);
     });
 
-    // Tail
-    const tailGeometry = new THREE.BoxGeometry(0.1, 0.6, 0.1);
-    const tail = new THREE.Mesh(tailGeometry, bodyMaterial);
-    tail.position.set(0.6, 1.2, -1.2);
+    // Tail - short and upturned
+    const tailGeometry = new THREE.BoxGeometry(0.12, 0.35, 0.1);
+    const tail = new THREE.Mesh(tailGeometry, darkFurMaterial);
+    tail.position.set(0, 1.9, -1.4);
+    tail.rotation.x = -0.5;
     tail.name = 'tail';
     goat.add(tail);
 
@@ -169,221 +382,580 @@ function createGoat(): THREE.Group {
 }
 
 // ============================================
-// CREATE HEN - Red with comb and wattle
+// CREATE HEN - Ultra Realistic with feathers
 // ============================================
 function createHen(): THREE.Group {
     const hen = new THREE.Group();
 
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xdc4c2c, roughness: 0.7 });
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xc94420, roughness: 0.8 });
+    const breastMaterial = new THREE.MeshStandardMaterial({ color: 0xd4633e, roughness: 0.8 });
+    const combMaterial = new THREE.MeshStandardMaterial({ color: 0xff2222, roughness: 0.5 });
+    const beakMaterial = new THREE.MeshStandardMaterial({ color: 0xf5a623, roughness: 0.4 });
+    const legMaterial = new THREE.MeshStandardMaterial({ color: 0xf5b342, roughness: 0.5 });
+    const tailMaterial = new THREE.MeshStandardMaterial({ color: 0x2d2d2d, roughness: 0.7 });
+    const wingMaterial = new THREE.MeshStandardMaterial({ color: 0xa83820, roughness: 0.8 });
 
-    // Body
-    const bodyGeometry = new THREE.SphereGeometry(0.35, 16, 16);
+    // Main Body - plump
+    const bodyGeometry = new THREE.SphereGeometry(0.45, 16, 16);
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    body.position.y = 0.6;
-    body.scale.set(1, 1.2, 1.3);
+    body.position.y = 0.7;
+    body.scale.set(1, 1.1, 1.4);
     body.castShadow = true;
+    body.receiveShadow = true;
     hen.add(body);
 
+    // Breast - lighter colored
+    const breastGeometry = new THREE.SphereGeometry(0.35, 12, 12);
+    const breast = new THREE.Mesh(breastGeometry, breastMaterial);
+    breast.position.set(0, 0.6, 0.25);
+    breast.scale.set(0.8, 0.9, 0.6);
+    hen.add(breast);
+
+    // Neck
+    const neckGeometry = new THREE.CylinderGeometry(0.12, 0.18, 0.3, 12);
+    const neck = new THREE.Mesh(neckGeometry, bodyMaterial);
+    neck.position.set(0, 1.0, 0.35);
+    hen.add(neck);
+
     // Head
-    const headGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+    const headGeometry = new THREE.SphereGeometry(0.22, 16, 16);
     const head = new THREE.Mesh(headGeometry, bodyMaterial);
-    head.position.set(0, 1.1, 0.4);
+    head.position.set(0, 1.25, 0.45);
     head.castShadow = true;
     head.name = 'head';
     hen.add(head);
 
-    // Comb
-    const combGeometry = new THREE.BoxGeometry(0.15, 0.3, 0.1);
-    const combMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-    const comb = new THREE.Mesh(combGeometry, combMaterial);
-    comb.position.set(0, 1.35, 0.35);
-    hen.add(comb);
+    // Eyes
+    const eyeWhiteGeometry = new THREE.SphereGeometry(0.06, 10, 10);
+    const eyeWhiteMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    const eyePupilGeometry = new THREE.SphereGeometry(0.035, 8, 8);
+    const eyePupilMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
+    const eyeIrisGeometry = new THREE.SphereGeometry(0.045, 8, 8);
+    const eyeIrisMaterial = new THREE.MeshStandardMaterial({ color: 0xffa500 }); // Orange iris
 
-    // Beak
-    const beakGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.15);
-    const beakMaterial = new THREE.MeshStandardMaterial({ color: 0xffaa00 });
-    const beak = new THREE.Mesh(beakGeometry, beakMaterial);
-    beak.position.set(0, 1.05, 0.55);
-    hen.add(beak);
+    // Right eye
+    const eyeWhite1 = new THREE.Mesh(eyeWhiteGeometry, eyeWhiteMaterial);
+    eyeWhite1.position.set(0.1, 1.3, 0.6);
+    hen.add(eyeWhite1);
+    const eyeIris1 = new THREE.Mesh(eyeIrisGeometry, eyeIrisMaterial);
+    eyeIris1.position.set(0.1, 1.3, 0.65);
+    hen.add(eyeIris1);
+    const eyePupil1 = new THREE.Mesh(eyePupilGeometry, eyePupilMaterial);
+    eyePupil1.position.set(0.1, 1.3, 0.68);
+    hen.add(eyePupil1);
 
-    // Wattle
-    const wattleGeometry = new THREE.BoxGeometry(0.08, 0.1, 0.05);
-    const wattle = new THREE.Mesh(wattleGeometry, combMaterial);
-    wattle.position.set(0, 0.85, 0.35);
-    hen.add(wattle);
+    // Left eye
+    const eyeWhite2 = new THREE.Mesh(eyeWhiteGeometry, eyeWhiteMaterial);
+    eyeWhite2.position.set(-0.1, 1.3, 0.6);
+    hen.add(eyeWhite2);
+    const eyeIris2 = new THREE.Mesh(eyeIrisGeometry, eyeIrisMaterial);
+    eyeIris2.position.set(-0.1, 1.3, 0.65);
+    hen.add(eyeIris2);
+    const eyePupil2 = new THREE.Mesh(eyePupilGeometry, eyePupilMaterial);
+    eyePupil2.position.set(-0.1, 1.3, 0.68);
+    hen.add(eyePupil2);
 
-    // Legs
-    const legGeometry = new THREE.BoxGeometry(0.08, 0.5, 0.08);
-    const legMaterial = new THREE.MeshStandardMaterial({ color: 0xffaa00 });
-    const leg1 = new THREE.Mesh(legGeometry, legMaterial);
-    leg1.position.set(-0.15, 0.2, 0);
-    leg1.name = 'leg0';
-    hen.add(leg1);
-    const leg2 = leg1.clone();
-    leg2.position.x = 0.15;
-    leg2.name = 'leg1';
-    hen.add(leg2);
+    // Comb - multi-part
+    const comb1 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.2, 0.08), combMaterial);
+    comb1.position.set(0, 1.5, 0.43);
+    hen.add(comb1);
+    const comb2 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.18, 0.08), combMaterial);
+    comb2.position.set(0, 1.48, 0.35);
+    hen.add(comb2);
+    const comb3 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.15, 0.08), combMaterial);
+    comb3.position.set(0, 1.45, 0.28);
+    hen.add(comb3);
 
-    // Tail
-    const tailGeometry = new THREE.BoxGeometry(0.1, 0.4, 0.2);
-    const tail = new THREE.Mesh(tailGeometry, bodyMaterial);
-    tail.position.set(0, 0.8, -0.4);
-    tail.rotation.z = 0.3;
-    tail.name = 'tail';
-    hen.add(tail);
+    // Beak - upper and lower
+    const upperBeakGeometry = new THREE.BoxGeometry(0.1, 0.06, 0.18);
+    const upperBeak = new THREE.Mesh(upperBeakGeometry, beakMaterial);
+    upperBeak.position.set(0, 1.22, 0.7);
+    hen.add(upperBeak);
+    const lowerBeakGeometry = new THREE.BoxGeometry(0.08, 0.04, 0.12);
+    const lowerBeak = new THREE.Mesh(lowerBeakGeometry, beakMaterial);
+    lowerBeak.position.set(0, 1.17, 0.68);
+    hen.add(lowerBeak);
 
-    // Wing
-    const wingGeometry = new THREE.BoxGeometry(0.1, 0.3, 0.3);
-    const wing = new THREE.Mesh(wingGeometry, bodyMaterial);
-    wing.position.set(0.35, 0.7, 0.1);
-    hen.add(wing);
+    // Wattle - two parts
+    const wattle1 = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), combMaterial);
+    wattle1.position.set(0.03, 1.1, 0.6);
+    wattle1.scale.set(1, 1.5, 1);
+    hen.add(wattle1);
+    const wattle2 = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), combMaterial);
+    wattle2.position.set(-0.03, 1.08, 0.58);
+    wattle2.scale.set(1, 1.3, 1);
+    hen.add(wattle2);
+
+    // Wings - layered feathers
+    const wing1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.35), wingMaterial);
+    wing1.position.set(0.4, 0.7, 0.05);
+    wing1.rotation.z = -0.2;
+    hen.add(wing1);
+    const wing1b = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.2, 0.28), bodyMaterial);
+    wing1b.position.set(0.42, 0.65, 0.05);
+    wing1b.rotation.z = -0.2;
+    hen.add(wing1b);
+
+    const wing2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.35), wingMaterial);
+    wing2.position.set(-0.4, 0.7, 0.05);
+    wing2.rotation.z = 0.2;
+    hen.add(wing2);
+    const wing2b = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.2, 0.28), bodyMaterial);
+    wing2b.position.set(-0.42, 0.65, 0.05);
+    wing2b.rotation.z = 0.2;
+    hen.add(wing2b);
+
+    // Tail feathers - multiple
+    const tailPositions = [
+        { pos: [0, 0.95, -0.5], rot: [-0.8, 0, 0], size: [0.05, 0.35, 0.15] },
+        { pos: [0.08, 0.9, -0.45], rot: [-0.7, 0.2, 0.1], size: [0.04, 0.3, 0.12] },
+        { pos: [-0.08, 0.9, -0.45], rot: [-0.7, -0.2, -0.1], size: [0.04, 0.3, 0.12] },
+        { pos: [0.05, 0.85, -0.4], rot: [-0.6, 0.1, 0.05], size: [0.04, 0.25, 0.1] },
+        { pos: [-0.05, 0.85, -0.4], rot: [-0.6, -0.1, -0.05], size: [0.04, 0.25, 0.1] }
+    ];
+    tailPositions.forEach(t => {
+        const feather = new THREE.Mesh(new THREE.BoxGeometry(t.size[0], t.size[1], t.size[2]), tailMaterial);
+        feather.position.set(t.pos[0], t.pos[1], t.pos[2]);
+        feather.rotation.set(t.rot[0], t.rot[1], t.rot[2]);
+        feather.name = 'tail';
+        hen.add(feather);
+    });
+
+    // Legs - skinny with joints
+    const thighGeometry = new THREE.CylinderGeometry(0.05, 0.06, 0.2, 8);
+    const shinGeometry = new THREE.CylinderGeometry(0.03, 0.04, 0.25, 8);
+    const footGeometry = new THREE.BoxGeometry(0.12, 0.04, 0.15);
+
+    // Right leg
+    const thigh1 = new THREE.Mesh(thighGeometry, legMaterial);
+    thigh1.position.set(0.12, 0.35, 0);
+    hen.add(thigh1);
+    const shin1 = new THREE.Mesh(shinGeometry, legMaterial);
+    shin1.position.set(0.12, 0.15, 0.03);
+    shin1.name = 'leg0';
+    hen.add(shin1);
+    const foot1 = new THREE.Mesh(footGeometry, legMaterial);
+    foot1.position.set(0.12, 0.02, 0.05);
+    hen.add(foot1);
+
+    // Left leg
+    const thigh2 = new THREE.Mesh(thighGeometry, legMaterial);
+    thigh2.position.set(-0.12, 0.35, 0);
+    hen.add(thigh2);
+    const shin2 = new THREE.Mesh(shinGeometry, legMaterial);
+    shin2.position.set(-0.12, 0.15, 0.03);
+    shin2.name = 'leg1';
+    hen.add(shin2);
+    const foot2 = new THREE.Mesh(footGeometry, legMaterial);
+    foot2.position.set(-0.12, 0.02, 0.05);
+    hen.add(foot2);
+
+    // Toes
+    const toeGeometry = new THREE.BoxGeometry(0.02, 0.02, 0.08);
+    [-1, 0, 1].forEach(offset => {
+        const toe1 = new THREE.Mesh(toeGeometry, legMaterial);
+        toe1.position.set(0.12 + offset * 0.04, 0.01, 0.12);
+        hen.add(toe1);
+        const toe2 = new THREE.Mesh(toeGeometry, legMaterial);
+        toe2.position.set(-0.12 + offset * 0.04, 0.01, 0.12);
+        hen.add(toe2);
+    });
 
     return hen;
 }
 
 // ============================================
-// CREATE CARETAKER (FARMER) - Larger size
+// CREATE CARETAKER (FARMER) - Ultra Realistic
 // ============================================
 function createCaretaker(): THREE.Group {
     const caretaker = new THREE.Group();
 
-    // Body (shirt)
-    const bodyGeometry = new THREE.BoxGeometry(1.5, 2.5, 0.9);
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.7 });
-    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    body.position.y = 1.5;
-    body.castShadow = true;
-    body.name = 'body';
-    caretaker.add(body);
+    const skinMaterial = new THREE.MeshStandardMaterial({ color: 0xf5d0b5, roughness: 0.7 });
+    const shirtMaterial = new THREE.MeshStandardMaterial({ color: 0x4a7c59, roughness: 0.8 }); // Green plaid shirt
+    const overallsMaterial = new THREE.MeshStandardMaterial({ color: 0x3d5c8a, roughness: 0.8 }); // Blue denim
+    const bootMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3728, roughness: 0.6 });
+    const hatMaterial = new THREE.MeshStandardMaterial({ color: 0xc4a35a, roughness: 0.7 }); // Straw hat
+    const hairMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3728, roughness: 0.9 });
+
+    // Torso
+    const torsoGeometry = new THREE.BoxGeometry(1.6, 2.0, 0.9);
+    const torso = new THREE.Mesh(torsoGeometry, shirtMaterial);
+    torso.position.y = 2.5;
+    torso.castShadow = true;
+    caretaker.add(torso);
+
+    // Shirt collar
+    const collarGeometry = new THREE.BoxGeometry(0.6, 0.15, 0.3);
+    const collar = new THREE.Mesh(collarGeometry, shirtMaterial);
+    collar.position.set(0, 3.55, 0.3);
+    caretaker.add(collar);
+
+    // Overalls bib
+    const bibGeometry = new THREE.BoxGeometry(0.9, 0.8, 0.15);
+    const bib = new THREE.Mesh(bibGeometry, overallsMaterial);
+    bib.position.set(0, 2.9, 0.5);
+    caretaker.add(bib);
+
+    // Overall straps
+    const strapGeometry = new THREE.BoxGeometry(0.15, 1.2, 0.08);
+    const strap1 = new THREE.Mesh(strapGeometry, overallsMaterial);
+    strap1.position.set(0.3, 2.9, 0.45);
+    caretaker.add(strap1);
+    const strap2 = strap1.clone();
+    strap2.position.x = -0.3;
+    caretaker.add(strap2);
 
     // Head
-    const headGeometry = new THREE.SphereGeometry(0.4, 16, 16);
-    const headMaterial = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.6 });
-    const head = new THREE.Mesh(headGeometry, headMaterial);
-    head.position.set(0, 3, 0);
+    const headGeometry = new THREE.SphereGeometry(0.5, 20, 20);
+    const head = new THREE.Mesh(headGeometry, skinMaterial);
+    head.position.set(0, 4.0, 0);
     head.castShadow = true;
     head.name = 'head';
     caretaker.add(head);
 
-    // Hat
-    const hatGeometry = new THREE.ConeGeometry(0.55, 0.6, 16);
-    const hatMaterial = new THREE.MeshStandardMaterial({ color: 0x654321 });
-    const hat = new THREE.Mesh(hatGeometry, hatMaterial);
-    hat.position.set(0, 3.6, 0);
-    caretaker.add(hat);
+    // Hair - back
+    const hairBackGeometry = new THREE.SphereGeometry(0.52, 16, 16);
+    const hairBack = new THREE.Mesh(hairBackGeometry, hairMaterial);
+    hairBack.position.set(0, 4.1, -0.15);
+    hairBack.scale.set(1, 0.8, 0.8);
+    caretaker.add(hairBack);
 
-    // Arms
-    const armGeometry = new THREE.BoxGeometry(0.35, 1.5, 0.35);
-    const armMaterial = new THREE.MeshStandardMaterial({ color: 0xffdbac });
-    const leftArm = new THREE.Mesh(armGeometry, armMaterial);
-    leftArm.position.set(-0.9, 2, 0);
-    leftArm.castShadow = true;
-    leftArm.name = 'leftArm';
-    caretaker.add(leftArm);
-    const rightArm = new THREE.Mesh(armGeometry, armMaterial);
-    rightArm.position.set(0.9, 2, 0);
-    rightArm.castShadow = true;
-    rightArm.name = 'rightArm';
-    caretaker.add(rightArm);
+    // Ears
+    const earGeometry = new THREE.SphereGeometry(0.12, 8, 8);
+    const ear1 = new THREE.Mesh(earGeometry, skinMaterial);
+    ear1.position.set(0.5, 4.0, 0);
+    ear1.scale.set(0.6, 1, 0.8);
+    caretaker.add(ear1);
+    const ear2 = ear1.clone();
+    ear2.position.x = -0.5;
+    caretaker.add(ear2);
 
-    // Legs
-    const legGeometry = new THREE.BoxGeometry(0.35, 1.3, 0.35);
-    const legMaterial = new THREE.MeshStandardMaterial({ color: 0x2c2c2c });
-    const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
-    leftLeg.position.set(-0.35, 0.65, 0);
-    leftLeg.castShadow = true;
-    leftLeg.name = 'leftLeg';
-    caretaker.add(leftLeg);
-    const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
-    rightLeg.position.set(0.35, 0.65, 0);
-    rightLeg.castShadow = true;
-    rightLeg.name = 'rightLeg';
-    caretaker.add(rightLeg);
+    // Eyes
+    const eyeWhiteGeometry = new THREE.SphereGeometry(0.1, 12, 12);
+    const eyeWhiteMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    const eyePupilGeometry = new THREE.SphereGeometry(0.05, 8, 8);
+    const eyePupilMaterial = new THREE.MeshStandardMaterial({ color: 0x2d1810 });
+    const eyeIrisGeometry = new THREE.SphereGeometry(0.07, 8, 8);
+    const eyeIrisMaterial = new THREE.MeshStandardMaterial({ color: 0x4a90d9 }); // Blue eyes
 
-    // Shoes
-    const shoeGeometry = new THREE.BoxGeometry(0.4, 0.3, 0.5);
-    const shoeMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
-    const leftShoe = new THREE.Mesh(shoeGeometry, shoeMaterial);
-    leftShoe.position.set(-0.35, 0, 0);
-    caretaker.add(leftShoe);
-    const rightShoe = leftShoe.clone();
-    rightShoe.position.x = 0.35;
-    caretaker.add(rightShoe);
+    // Right eye
+    const eyeWhite1 = new THREE.Mesh(eyeWhiteGeometry, eyeWhiteMaterial);
+    eyeWhite1.position.set(0.18, 4.1, 0.4);
+    caretaker.add(eyeWhite1);
+    const eyeIris1 = new THREE.Mesh(eyeIrisGeometry, eyeIrisMaterial);
+    eyeIris1.position.set(0.18, 4.1, 0.48);
+    caretaker.add(eyeIris1);
+    const eyePupil1 = new THREE.Mesh(eyePupilGeometry, eyePupilMaterial);
+    eyePupil1.position.set(0.18, 4.1, 0.53);
+    caretaker.add(eyePupil1);
+
+    // Left eye
+    const eyeWhite2 = new THREE.Mesh(eyeWhiteGeometry, eyeWhiteMaterial);
+    eyeWhite2.position.set(-0.18, 4.1, 0.4);
+    caretaker.add(eyeWhite2);
+    const eyeIris2 = new THREE.Mesh(eyeIrisGeometry, eyeIrisMaterial);
+    eyeIris2.position.set(-0.18, 4.1, 0.48);
+    caretaker.add(eyeIris2);
+    const eyePupil2 = new THREE.Mesh(eyePupilGeometry, eyePupilMaterial);
+    eyePupil2.position.set(-0.18, 4.1, 0.53);
+    caretaker.add(eyePupil2);
+
+    // Eyebrows
+    const eyebrowGeometry = new THREE.BoxGeometry(0.18, 0.05, 0.06);
+    const eyebrowMaterial = new THREE.MeshStandardMaterial({ color: 0x3d2817 });
+    const eyebrow1 = new THREE.Mesh(eyebrowGeometry, eyebrowMaterial);
+    eyebrow1.position.set(0.18, 4.25, 0.42);
+    eyebrow1.rotation.z = -0.1;
+    caretaker.add(eyebrow1);
+    const eyebrow2 = eyebrow1.clone();
+    eyebrow2.position.x = -0.18;
+    eyebrow2.rotation.z = 0.1;
+    caretaker.add(eyebrow2);
+
+    // Nose
+    const noseGeometry = new THREE.BoxGeometry(0.12, 0.18, 0.15);
+    const nose = new THREE.Mesh(noseGeometry, skinMaterial);
+    nose.position.set(0, 3.95, 0.5);
+    caretaker.add(nose);
+
+    // Smile
+    const smileGeometry = new THREE.TorusGeometry(0.12, 0.03, 8, 16, Math.PI);
+    const smileMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
+    const smile = new THREE.Mesh(smileGeometry, smileMaterial);
+    smile.position.set(0, 3.75, 0.48);
+    smile.rotation.x = Math.PI;
+    caretaker.add(smile);
+
+    // Straw Hat
+    const hatBrimGeometry = new THREE.CylinderGeometry(0.9, 0.9, 0.1, 24);
+    const hatBrim = new THREE.Mesh(hatBrimGeometry, hatMaterial);
+    hatBrim.position.set(0, 4.5, 0);
+    caretaker.add(hatBrim);
+    const hatTopGeometry = new THREE.CylinderGeometry(0.45, 0.55, 0.5, 16);
+    const hatTop = new THREE.Mesh(hatTopGeometry, hatMaterial);
+    hatTop.position.set(0, 4.8, 0);
+    caretaker.add(hatTop);
+    // Hat band
+    const hatBandGeometry = new THREE.CylinderGeometry(0.56, 0.56, 0.1, 16);
+    const hatBandMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
+    const hatBand = new THREE.Mesh(hatBandGeometry, hatBandMaterial);
+    hatBand.position.set(0, 4.6, 0);
+    caretaker.add(hatBand);
+
+    // Arms with sleeves
+    const upperArmGeometry = new THREE.BoxGeometry(0.4, 0.9, 0.4);
+    const lowerArmGeometry = new THREE.BoxGeometry(0.3, 0.8, 0.3);
+    const handGeometry = new THREE.BoxGeometry(0.25, 0.3, 0.15);
+
+    // Right arm
+    const upperArm1 = new THREE.Mesh(upperArmGeometry, shirtMaterial);
+    upperArm1.position.set(1.0, 2.8, 0);
+    upperArm1.castShadow = true;
+    caretaker.add(upperArm1);
+    const lowerArm1 = new THREE.Mesh(lowerArmGeometry, skinMaterial);
+    lowerArm1.position.set(1.0, 2.0, 0);
+    lowerArm1.castShadow = true;
+    lowerArm1.name = 'rightArm';
+    caretaker.add(lowerArm1);
+    const hand1 = new THREE.Mesh(handGeometry, skinMaterial);
+    hand1.position.set(1.0, 1.5, 0);
+    caretaker.add(hand1);
+
+    // Left arm
+    const upperArm2 = new THREE.Mesh(upperArmGeometry, shirtMaterial);
+    upperArm2.position.set(-1.0, 2.8, 0);
+    upperArm2.castShadow = true;
+    caretaker.add(upperArm2);
+    const lowerArm2 = new THREE.Mesh(lowerArmGeometry, skinMaterial);
+    lowerArm2.position.set(-1.0, 2.0, 0);
+    lowerArm2.castShadow = true;
+    lowerArm2.name = 'leftArm';
+    caretaker.add(lowerArm2);
+    const hand2 = new THREE.Mesh(handGeometry, skinMaterial);
+    hand2.position.set(-1.0, 1.5, 0);
+    caretaker.add(hand2);
+
+    // Legs with overalls
+    const upperLegGeometry = new THREE.BoxGeometry(0.5, 1.0, 0.5);
+    const lowerLegGeometry = new THREE.BoxGeometry(0.4, 0.8, 0.4);
+    const bootGeometry = new THREE.BoxGeometry(0.5, 0.4, 0.6);
+
+    // Right leg
+    const upperLeg1 = new THREE.Mesh(upperLegGeometry, overallsMaterial);
+    upperLeg1.position.set(0.4, 1.0, 0);
+    upperLeg1.castShadow = true;
+    caretaker.add(upperLeg1);
+    const lowerLeg1 = new THREE.Mesh(lowerLegGeometry, overallsMaterial);
+    lowerLeg1.position.set(0.4, 0.4, 0);
+    lowerLeg1.castShadow = true;
+    lowerLeg1.name = 'rightLeg';
+    caretaker.add(lowerLeg1);
+    const boot1 = new THREE.Mesh(bootGeometry, bootMaterial);
+    boot1.position.set(0.4, 0.2, 0.05);
+    boot1.castShadow = true;
+    caretaker.add(boot1);
+
+    // Left leg
+    const upperLeg2 = new THREE.Mesh(upperLegGeometry, overallsMaterial);
+    upperLeg2.position.set(-0.4, 1.0, 0);
+    upperLeg2.castShadow = true;
+    caretaker.add(upperLeg2);
+    const lowerLeg2 = new THREE.Mesh(lowerLegGeometry, overallsMaterial);
+    lowerLeg2.position.set(-0.4, 0.4, 0);
+    lowerLeg2.castShadow = true;
+    lowerLeg2.name = 'leftLeg';
+    caretaker.add(lowerLeg2);
+    const boot2 = new THREE.Mesh(bootGeometry, bootMaterial);
+    boot2.position.set(-0.4, 0.2, 0.05);
+    boot2.castShadow = true;
+    caretaker.add(boot2);
 
     return caretaker;
 }
 
 // ============================================
-// CREATE HOUSE
+// CREATE HOUSE - Ultra Realistic with details
 // ============================================
 function createHouse(): THREE.Group {
     const house = new THREE.Group();
 
-    // Walls
-    const wallGeometry = new THREE.BoxGeometry(10, 6, 12);
-    const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xd2691e, roughness: 0.7 });
+    const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xfff8dc, roughness: 0.8 }); // Cream colored walls
+    const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.9 });
+    const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.7 });
+    const windowMaterial = new THREE.MeshStandardMaterial({ color: 0x87ceeb, roughness: 0.2, metalness: 0.1 });
+    const frameMaterial = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.6 });
+    const shutterMaterial = new THREE.MeshStandardMaterial({ color: 0x2e7d32, roughness: 0.7 });
+    const brickMaterial = new THREE.MeshStandardMaterial({ color: 0xb22222, roughness: 0.9 });
+
+    // Main walls
+    const wallGeometry = new THREE.BoxGeometry(10, 7, 12);
     const walls = new THREE.Mesh(wallGeometry, wallMaterial);
-    walls.position.y = 3;
+    walls.position.y = 3.5;
     walls.castShadow = true;
     walls.receiveShadow = true;
     house.add(walls);
 
+    // Foundation
+    const foundationGeometry = new THREE.BoxGeometry(11, 0.6, 13);
+    const foundationMaterial = new THREE.MeshStandardMaterial({ color: 0x808080, roughness: 0.9 });
+    const foundation = new THREE.Mesh(foundationGeometry, foundationMaterial);
+    foundation.position.y = 0.3;
+    house.add(foundation);
+
     // Roof
-    const roofGeometry = new THREE.ConeGeometry(7.5, 4, 4);
-    const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.8 });
+    const roofGeometry = new THREE.ConeGeometry(8, 4.5, 4);
     const roof = new THREE.Mesh(roofGeometry, roofMaterial);
-    roof.position.y = 8.5;
+    roof.position.y = 9.5;
     roof.rotation.y = Math.PI / 4;
     roof.castShadow = true;
     house.add(roof);
 
+    // Roof edge trim
+    const trimGeometry = new THREE.BoxGeometry(11.5, 0.3, 13.5);
+    const trimMaterial = new THREE.MeshStandardMaterial({ color: 0xf5f5f5 });
+    const trim = new THREE.Mesh(trimGeometry, trimMaterial);
+    trim.position.y = 7.15;
+    house.add(trim);
+
     // Door
-    const doorGeometry = new THREE.BoxGeometry(2, 3, 0.2);
-    const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x4a2511 });
+    const doorGeometry = new THREE.BoxGeometry(2, 3.5, 0.25);
     const door = new THREE.Mesh(doorGeometry, doorMaterial);
-    door.position.set(0, 2, 6.1);
+    door.position.set(0, 2.25, 6.1);
     house.add(door);
 
-    // Handle
-    const handleGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.05);
-    const handleMaterial = new THREE.MeshStandardMaterial({ color: 0xffd700 });
+    // Door frame
+    const doorFrameTop = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.2, 0.3), frameMaterial);
+    doorFrameTop.position.set(0, 4.05, 6.1);
+    house.add(doorFrameTop);
+    const doorFrameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3.5, 0.3), frameMaterial);
+    doorFrameLeft.position.set(-1.1, 2.25, 6.1);
+    house.add(doorFrameLeft);
+    const doorFrameRight = doorFrameLeft.clone();
+    doorFrameRight.position.x = 1.1;
+    house.add(doorFrameRight);
+
+    // Door handle
+    const handleGeometry = new THREE.SphereGeometry(0.12, 12, 12);
+    const handleMaterial = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.8, roughness: 0.2 });
     const handle = new THREE.Mesh(handleGeometry, handleMaterial);
-    handle.position.set(0.7, 2, 6.2);
-    handle.rotation.z = Math.PI / 2;
+    handle.position.set(0.7, 2.3, 6.25);
     house.add(handle);
 
-    // Windows
-    const windowGeometry = new THREE.BoxGeometry(1.2, 1.2, 0.2);
-    const windowMaterial = new THREE.MeshStandardMaterial({ color: 0x87ceeb });
-    [-1.5, 1.5].forEach(x => {
-        const win = new THREE.Mesh(windowGeometry, windowMaterial);
-        win.position.set(x, 5, 6.1);
+    // Windows with shutters
+    const windowPositions = [
+        { x: -2.8, y: 4.5, z: 6.05 },
+        { x: 2.8, y: 4.5, z: 6.05 },
+        { x: 5.05, y: 4.5, z: 0 },
+        { x: -5.05, y: 4.5, z: 0 }
+    ];
+
+    windowPositions.forEach((pos, idx) => {
+        // Window glass
+        const windowGeom = new THREE.BoxGeometry(1.4, 1.6, 0.15);
+        const win = new THREE.Mesh(windowGeom, windowMaterial);
+        win.position.set(pos.x, pos.y, pos.z);
+        if (idx >= 2) win.rotation.y = Math.PI / 2;
         house.add(win);
+
+        // Window frame
+        const frameGeom = new THREE.BoxGeometry(1.6, 1.8, 0.2);
+        const frame = new THREE.Mesh(frameGeom, frameMaterial);
+        frame.position.set(pos.x, pos.y, pos.z - 0.05);
+        if (idx >= 2) frame.rotation.y = Math.PI / 2;
+        house.add(frame);
+
+        // Window cross
+        const crossH = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.1, 0.18), frameMaterial);
+        crossH.position.set(pos.x, pos.y, pos.z + 0.02);
+        if (idx >= 2) crossH.rotation.y = Math.PI / 2;
+        house.add(crossH);
+        const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.6, 0.18), frameMaterial);
+        crossV.position.set(pos.x, pos.y, pos.z + 0.02);
+        if (idx >= 2) crossV.rotation.y = Math.PI / 2;
+        house.add(crossV);
+
+        // Shutters (only for front windows)
+        if (idx < 2) {
+            const shutterGeom = new THREE.BoxGeometry(0.6, 1.6, 0.15);
+            const shutterL = new THREE.Mesh(shutterGeom, shutterMaterial);
+            shutterL.position.set(pos.x - 1.0, pos.y, pos.z);
+            house.add(shutterL);
+            const shutterR = new THREE.Mesh(shutterGeom, shutterMaterial);
+            shutterR.position.set(pos.x + 1.0, pos.y, pos.z);
+            house.add(shutterR);
+
+            // Flower box
+            const flowerBoxGeom = new THREE.BoxGeometry(1.6, 0.3, 0.4);
+            const flowerBoxMat = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
+            const flowerBox = new THREE.Mesh(flowerBoxGeom, flowerBoxMat);
+            flowerBox.position.set(pos.x, pos.y - 1.05, pos.z + 0.2);
+            house.add(flowerBox);
+
+            // Flowers
+            const flowerColors = [0xff69b4, 0xff6347, 0xffd700, 0xff1493];
+            for (let f = 0; f < 4; f++) {
+                const flowerGeom = new THREE.SphereGeometry(0.15, 8, 8);
+                const flowerMat = new THREE.MeshStandardMaterial({ color: flowerColors[f % 4] });
+                const flower = new THREE.Mesh(flowerGeom, flowerMat);
+                flower.position.set(pos.x - 0.5 + f * 0.35, pos.y - 0.85, pos.z + 0.25);
+                house.add(flower);
+            }
+        }
     });
 
-    // Chimney
-    const chimneyGeometry = new THREE.BoxGeometry(0.8, 3, 0.8);
-    const chimneyMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
-    const chimney = new THREE.Mesh(chimneyGeometry, chimneyMaterial);
-    chimney.position.set(3, 6, -3);
+    // Chimney with brick detail
+    const chimneyGeometry = new THREE.BoxGeometry(1.2, 4, 1.2);
+    const chimney = new THREE.Mesh(chimneyGeometry, brickMaterial);
+    chimney.position.set(3, 8, -3);
     chimney.castShadow = true;
     house.add(chimney);
+    // Chimney top
+    const chimneyTopGeom = new THREE.BoxGeometry(1.5, 0.3, 1.5);
+    const chimneyTop = new THREE.Mesh(chimneyTopGeom, brickMaterial);
+    chimneyTop.position.set(3, 10.15, -3);
+    house.add(chimneyTop);
 
     // Porch
-    const porchGeometry = new THREE.BoxGeometry(3, 0.3, 1.5);
-    const porchMaterial = new THREE.MeshStandardMaterial({ color: 0xa0522d });
-    const porch = new THREE.Mesh(porchGeometry, porchMaterial);
-    porch.position.set(0, 0.15, 6.5);
-    house.add(porch);
+    const porchFloorGeom = new THREE.BoxGeometry(6, 0.3, 3);
+    const porchMaterial = new THREE.MeshStandardMaterial({ color: 0xa0522d, roughness: 0.8 });
+    const porchFloor = new THREE.Mesh(porchFloorGeom, porchMaterial);
+    porchFloor.position.set(0, 0.45, 7.5);
+    house.add(porchFloor);
 
-    // Pillars
-    const pillarGeometry = new THREE.CylinderGeometry(0.2, 0.2, 2, 8);
-    const pillarMaterial = new THREE.MeshStandardMaterial({ color: 0xd2b48c });
-    [-1.2, 1.2].forEach(x => {
+    // Porch steps
+    for (let s = 0; s < 3; s++) {
+        const stepGeom = new THREE.BoxGeometry(3, 0.2, 0.5);
+        const step = new THREE.Mesh(stepGeom, porchMaterial);
+        step.position.set(0, 0.1 + s * 0.15, 9 + (2 - s) * 0.4);
+        house.add(step);
+    }
+
+    // Porch roof
+    const porchRoofGeom = new THREE.BoxGeometry(6.5, 0.2, 3.5);
+    const porchRoof = new THREE.Mesh(porchRoofGeom, roofMaterial);
+    porchRoof.position.set(0, 4.2, 7.5);
+    house.add(porchRoof);
+
+    // Porch pillars
+    const pillarGeometry = new THREE.CylinderGeometry(0.2, 0.25, 3.7, 12);
+    const pillarMaterial = new THREE.MeshStandardMaterial({ color: 0xf5f5f5 });
+    [[-2.5, 7.5], [2.5, 7.5], [-2.5, 9], [2.5, 9]].forEach(pos => {
         const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
-        pillar.position.set(x, 1, 6.5);
+        pillar.position.set(pos[0], 2.3, pos[1]);
         pillar.castShadow = true;
         house.add(pillar);
+    });
+
+    // Potted plants on porch
+    const potMaterial = new THREE.MeshStandardMaterial({ color: 0xcd853f });
+    const plantMaterial = new THREE.MeshStandardMaterial({ color: 0x228b22 });
+    [[-2, 7], [2, 7]].forEach(pos => {
+        const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.25, 0.5, 8), potMaterial);
+        pot.position.set(pos[0], 0.85, pos[1]);
+        house.add(pot);
+        const plant = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), plantMaterial);
+        plant.position.set(pos[0], 1.3, pos[1]);
+        house.add(plant);
     });
 
     return house;
@@ -455,24 +1027,95 @@ function createSilo(): THREE.Group {
 }
 
 // ============================================
-// CREATE TREE
+// CREATE TREE - Ultra Realistic with layers
 // ============================================
 function createTree(): THREE.Group {
     const tree = new THREE.Group();
 
-    const trunkGeometry = new THREE.CylinderGeometry(0.6, 0.8, 5, 8);
-    const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x654321 });
+    const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3728, roughness: 0.9 });
+    const barkMaterial = new THREE.MeshStandardMaterial({ color: 0x3d2e1f, roughness: 1 });
+    const foliageMaterial = new THREE.MeshStandardMaterial({ color: 0x2d7d32, roughness: 0.8 });
+    const foliageLightMaterial = new THREE.MeshStandardMaterial({ color: 0x4caf50, roughness: 0.7 });
+    const foliageDarkMaterial = new THREE.MeshStandardMaterial({ color: 0x1b5e20, roughness: 0.9 });
+
+    // Main trunk
+    const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.8, 6, 12);
     const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-    trunk.position.y = 2.5;
+    trunk.position.y = 3;
     trunk.castShadow = true;
     tree.add(trunk);
 
-    const foliageGeometry = new THREE.SphereGeometry(3.5, 8, 8);
-    const foliageMaterial = new THREE.MeshStandardMaterial({ color: 0x228b22, roughness: 0.7 });
-    const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
-    foliage.position.y = 5.5;
-    foliage.castShadow = true;
-    tree.add(foliage);
+    // Bark texture details
+    for (let i = 0; i < 8; i++) {
+        const barkGeometry = new THREE.BoxGeometry(0.15, 1.5 + Math.random(), 0.1);
+        const bark = new THREE.Mesh(barkGeometry, barkMaterial);
+        const angle = (i / 8) * Math.PI * 2;
+        bark.position.set(
+            Math.cos(angle) * 0.6,
+            2 + Math.random() * 2,
+            Math.sin(angle) * 0.6
+        );
+        bark.rotation.y = angle;
+        tree.add(bark);
+    }
+
+    // Branches
+    const branchMaterial = new THREE.MeshStandardMaterial({ color: 0x5d4037 });
+    const branchPositions = [
+        { pos: [0.8, 4.5, 0], rot: [0, 0, 0.7], len: 2 },
+        { pos: [-0.6, 5, 0.5], rot: [0.3, 0.5, -0.8], len: 1.8 },
+        { pos: [0.3, 5.5, -0.7], rot: [-0.4, 0, 0.6], len: 1.5 },
+        { pos: [-0.5, 4, -0.3], rot: [-0.2, -0.3, -0.6], len: 1.6 }
+    ];
+    branchPositions.forEach(b => {
+        const branchGeometry = new THREE.CylinderGeometry(0.08, 0.15, b.len, 6);
+        const branch = new THREE.Mesh(branchGeometry, branchMaterial);
+        branch.position.set(b.pos[0], b.pos[1], b.pos[2]);
+        branch.rotation.set(b.rot[0], b.rot[1], b.rot[2]);
+        branch.castShadow = true;
+        tree.add(branch);
+    });
+
+    // Foliage - multiple layers for realistic look
+    // Main center foliage
+    const foliage1 = new THREE.Mesh(new THREE.SphereGeometry(3.2, 12, 12), foliageMaterial);
+    foliage1.position.set(0, 7, 0);
+    foliage1.castShadow = true;
+    tree.add(foliage1);
+
+    // Upper foliage (lighter)
+    const foliage2 = new THREE.Mesh(new THREE.SphereGeometry(2.5, 10, 10), foliageLightMaterial);
+    foliage2.position.set(0.5, 8.5, 0.3);
+    foliage2.castShadow = true;
+    tree.add(foliage2);
+
+    // Side foliage clusters (darker)
+    const foliage3 = new THREE.Mesh(new THREE.SphereGeometry(2.2, 10, 10), foliageDarkMaterial);
+    foliage3.position.set(-1.5, 6.5, 1);
+    tree.add(foliage3);
+
+    const foliage4 = new THREE.Mesh(new THREE.SphereGeometry(2, 10, 10), foliageMaterial);
+    foliage4.position.set(1.5, 6.8, -0.8);
+    tree.add(foliage4);
+
+    const foliage5 = new THREE.Mesh(new THREE.SphereGeometry(1.8, 8, 8), foliageLightMaterial);
+    foliage5.position.set(-0.8, 7.5, -1.2);
+    tree.add(foliage5);
+
+    // Root bulges at base
+    const rootMaterial = new THREE.MeshStandardMaterial({ color: 0x3e2723, roughness: 1 });
+    for (let i = 0; i < 5; i++) {
+        const rootGeometry = new THREE.SphereGeometry(0.4 + Math.random() * 0.2, 6, 6);
+        const root = new THREE.Mesh(rootGeometry, rootMaterial);
+        const angle = (i / 5) * Math.PI * 2;
+        root.position.set(
+            Math.cos(angle) * 0.7,
+            0.2,
+            Math.sin(angle) * 0.7
+        );
+        root.scale.set(1, 0.5, 1);
+        tree.add(root);
+    }
 
     return tree;
 }
@@ -531,9 +1174,25 @@ export default function FarmScreen() {
     const router = useRouter();
     const { state, getTotalAnimals } = useFarm();
     const { colors, isDark } = useTheme();
-    const [isNight, setIsNight] = useState(false);
+
+    const getCurrentIsNight = () => {
+        const hour = new Date().getHours();
+        return hour < 6 || hour >= 18; // Night between 6 PM and 6 AM
+    };
+
+    const [isNight, setIsNight] = useState(getCurrentIsNight());
     const [showConvertReminder, setShowConvertReminder] = useState(true);
     const [cameraDistance, setCameraDistance] = useState(60);
+
+    const getTimeBasedGreeting = () => {
+        const hour = new Date().getHours();
+        if (hour < 12) return "Good Morning";
+        if (hour < 17) return "Good Afternoon";
+        return "Good Evening";
+    };
+
+    const userName = state.userName || 'Focus Farmer';
+    const greeting = `${getTimeBasedGreeting()}, ${userName}`;
 
     const glRef = useRef<GLView>(null);
     const sceneRef = useRef<THREE.Scene | null>(null);
@@ -544,7 +1203,14 @@ export default function FarmScreen() {
     const caretakerRef = useRef<any>(null);
     const lightsRef = useRef<{ ambient: THREE.AmbientLight | null; sun: THREE.DirectionalLight | null; moon: THREE.DirectionalLight | null; sunMesh: THREE.Mesh | null; moonMesh: THREE.Mesh | null; stars: THREE.Points | null; clouds: THREE.Group | null }>({ ambient: null, sun: null, moon: null, sunMesh: null, moonMesh: null, stars: null, clouds: null });
     const lastTouchRef = useRef({ x: 0, y: 0 });
-    const cameraAngleRef = useRef({ horizontal: 0, vertical: 0.3 });
+    const cameraControlRef = useRef({
+        currentHorizontal: 0,
+        targetHorizontal: 0,
+        currentVertical: 0.3,
+        targetVertical: 0.3,
+        currentDistance: 60,
+        targetDistance: 60
+    });
 
     const todayHours = (state.todayMinutes / 60).toFixed(1);
 
@@ -704,6 +1370,73 @@ export default function FarmScreen() {
         ground.receiveShadow = true;
         scene.add(ground);
 
+        // Add grass patches for realistic look
+        const grassColors = [0x3d8b28, 0x56b044, 0x4ca83c, 0x68c45a, 0x45a030];
+        for (let i = 0; i < 200; i++) {
+            const grassPatchGeometry = new THREE.PlaneGeometry(
+                3 + Math.random() * 5,
+                3 + Math.random() * 5
+            );
+            const grassMaterial = new THREE.MeshStandardMaterial({
+                color: grassColors[Math.floor(Math.random() * grassColors.length)],
+                roughness: 0.9
+            });
+            const grassPatch = new THREE.Mesh(grassPatchGeometry, grassMaterial);
+            grassPatch.rotation.x = -Math.PI / 2;
+            grassPatch.position.set(
+                (Math.random() - 0.5) * 280,
+                0.01 + Math.random() * 0.02,
+                (Math.random() - 0.5) * 280
+            );
+            grassPatch.receiveShadow = true;
+            scene.add(grassPatch);
+        }
+
+        // Add small grass blades/tufts
+        const grassTuftMaterial = new THREE.MeshStandardMaterial({ color: 0x2d7d32, roughness: 1 });
+        for (let i = 0; i < 100; i++) {
+            const tuftGeometry = new THREE.ConeGeometry(0.3, 0.8, 4);
+            const tuft = new THREE.Mesh(tuftGeometry, grassTuftMaterial);
+            tuft.position.set(
+                (Math.random() - 0.5) * 250,
+                0.4,
+                (Math.random() - 0.5) * 250
+            );
+            tuft.castShadow = true;
+            scene.add(tuft);
+        }
+
+        // Add small flower patches
+        const flowerColors = [0xffeb3b, 0xffffff, 0xe91e63, 0x9c27b0, 0xff5722];
+        for (let i = 0; i < 50; i++) {
+            const flowerGeometry = new THREE.SphereGeometry(0.2 + Math.random() * 0.1, 6, 6);
+            const flowerMaterial = new THREE.MeshStandardMaterial({
+                color: flowerColors[Math.floor(Math.random() * flowerColors.length)]
+            });
+            const flower = new THREE.Mesh(flowerGeometry, flowerMaterial);
+            flower.position.set(
+                (Math.random() - 0.5) * 140,
+                0.2,
+                (Math.random() - 0.5) * 140
+            );
+            scene.add(flower);
+        }
+
+        // Add small rocks
+        const rockMaterial = new THREE.MeshStandardMaterial({ color: 0x757575, roughness: 0.9 });
+        for (let i = 0; i < 30; i++) {
+            const rockGeometry = new THREE.SphereGeometry(0.3 + Math.random() * 0.4, 5, 5);
+            const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+            rock.position.set(
+                (Math.random() - 0.5) * 250,
+                0.15 + Math.random() * 0.1,
+                (Math.random() - 0.5) * 250
+            );
+            rock.scale.set(1, 0.6, 1);
+            rock.castShadow = true;
+            scene.add(rock);
+        }
+
         // Add buildings
         const house = createHouse();
         house.position.set(60, 0, -60);
@@ -846,12 +1579,19 @@ export default function FarmScreen() {
             const deltaTime = (currentTime - lastTime) / 1000;
             lastTime = currentTime;
 
+            // Smooth camera lerping
+            const cam = cameraControlRef.current;
+            const lerpFactor = 0.15; // Adjustment for smoothness speed
+
+            cam.currentHorizontal += (cam.targetHorizontal - cam.currentHorizontal) * lerpFactor;
+            cam.currentVertical += (cam.targetVertical - cam.currentVertical) * lerpFactor;
+            cam.currentDistance += (cam.targetDistance - cam.currentDistance) * lerpFactor;
+
             // Update camera position
             if (cameraRef.current) {
-                const { horizontal, vertical } = cameraAngleRef.current;
-                const x = Math.sin(horizontal) * Math.cos(vertical) * cameraDistance;
-                const y = Math.max(5, Math.sin(vertical) * cameraDistance);
-                const z = Math.cos(horizontal) * Math.cos(vertical) * cameraDistance;
+                const x = Math.sin(cam.currentHorizontal) * Math.cos(cam.currentVertical) * cam.currentDistance;
+                const y = Math.max(5, Math.sin(cam.currentVertical) * cam.currentDistance);
+                const z = Math.cos(cam.currentHorizontal) * Math.cos(cam.currentVertical) * cam.currentDistance;
                 cameraRef.current.position.set(x, y, z);
                 cameraRef.current.lookAt(0, 5, 0);
             }
@@ -985,7 +1725,7 @@ export default function FarmScreen() {
                 cancelAnimationFrame(animationRef.current);
             }
         };
-    }, [state.hens, state.goats, state.cows, cameraDistance]);
+    }, [state.hens, state.goats, state.cows]);
 
     const panResponder = useRef(
         PanResponder.create({
@@ -999,14 +1739,18 @@ export default function FarmScreen() {
                 const dy = (evt.nativeEvent.pageY - lastTouchRef.current.y) * 0.005;
                 lastTouchRef.current = { x: evt.nativeEvent.pageX, y: evt.nativeEvent.pageY };
 
-                cameraAngleRef.current.horizontal += dx;
-                cameraAngleRef.current.vertical = Math.max(0.1, Math.min(1.2, cameraAngleRef.current.vertical + dy));
+                cameraControlRef.current.targetHorizontal += dx;
+                cameraControlRef.current.targetVertical = Math.max(0.1, Math.min(1.2, cameraControlRef.current.targetVertical + dy));
             },
         })
     ).current;
 
-    const handleZoomIn = () => setCameraDistance(prev => Math.max(20, prev - 10));
-    const handleZoomOut = () => setCameraDistance(prev => Math.min(120, prev + 10));
+    const handleZoomIn = () => {
+        cameraControlRef.current.targetDistance = Math.max(20, cameraControlRef.current.targetDistance - 15);
+    };
+    const handleZoomOut = () => {
+        cameraControlRef.current.targetDistance = Math.min(120, cameraControlRef.current.targetDistance + 15);
+    };
 
     return (
         <View style={styles.container}>
@@ -1022,8 +1766,8 @@ export default function FarmScreen() {
                 {/* Header with Stats */}
                 <View style={[styles.header, { backgroundColor: isDark ? 'rgba(30,30,30,0.95)' : 'rgba(255,255,255,0.95)' }]}>
                     <View>
-                        <Text style={[styles.greeting, { color: colors.textSecondary }]}>🌾 Advanced 3D Farm Scene</Text>
                         <Text style={[styles.title, { color: colors.text }]}>🏡 Your Farm</Text>
+                        <Text style={[styles.greeting, { color: colors.textSecondary }]}>{greeting}</Text>
                     </View>
                     <View style={styles.statsRow}>
                         <View style={[styles.statBadge, { backgroundColor: isDark ? colors.surfaceSecondary : '#FFF8E1' }]}>
@@ -1061,33 +1805,28 @@ export default function FarmScreen() {
                     </View>
                 )}
 
-                {/* Controls */}
-                <View style={styles.controlsContainer}>
-                    {/* Day/Night Toggle */}
+                {/* Day/Night Controls */}
+                <View style={styles.dayNightContainer}>
                     <TouchableOpacity
                         style={[styles.dayNightBtn, isNight && styles.dayNightBtnNight]}
                         onPress={() => setIsNight(!isNight)}
+                        activeOpacity={0.7}
                     >
-                        {isNight ? <Moon size={20} color="#FFD700" /> : <Sun size={20} color="#FFD700" />}
+                        {isNight ? <Moon size={18} color="#FFD700" /> : <Sun size={18} color="#FFFFFF" />}
                         <Text style={[styles.dayNightText, isNight && styles.dayNightTextNight]}>
-                            {isNight ? '🌙 Night' : '🌞 Day'}
+                            {isNight ? 'Night' : 'Day'}
                         </Text>
                     </TouchableOpacity>
-
-                    {/* Zoom Controls */}
-                    <View style={styles.zoomControls}>
-                        <TouchableOpacity style={styles.controlBtn} onPress={handleZoomIn}>
-                            <ZoomIn size={22} color="#4A7C23" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.controlBtn} onPress={handleZoomOut}>
-                            <ZoomOut size={22} color="#4A7C23" />
-                        </TouchableOpacity>
-                    </View>
                 </View>
 
-                {/* Controls hint */}
-                <View style={styles.controlsHint}>
-                    <Text style={styles.controlsHintText}>Swipe to Rotate | Buttons to Zoom</Text>
+                {/* Zoom Controls - Separate container */}
+                <View style={styles.zoomContainer}>
+                    <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomIn} activeOpacity={0.7}>
+                        <ZoomIn size={20} color="#4A7C23" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomOut} activeOpacity={0.7}>
+                        <ZoomOut size={20} color="#4A7C23" />
+                    </TouchableOpacity>
                 </View>
 
                 <View style={styles.fabContainer}>
@@ -1120,35 +1859,29 @@ const styles = StyleSheet.create({
     },
     statEmoji: { fontSize: 14 },
     statText: { fontSize: 14, fontWeight: '700', color: '#8B6B00' },
-    controlsContainer: {
+    dayNightContainer: {
         position: 'absolute', right: 16, top: 140,
-        gap: 10,
     },
     dayNightBtn: {
         flexDirection: 'row', alignItems: 'center',
-        backgroundColor: '#FFD700', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, gap: 8,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 4,
+        backgroundColor: '#FF8C00', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, gap: 6,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 4,
+        minWidth: 90, justifyContent: 'center',
     },
     dayNightBtnNight: {
-        backgroundColor: '#1a1a2e',
+        backgroundColor: '#1a1a3e',
     },
-    dayNightText: { fontSize: 14, fontWeight: '700', color: '#333' },
+    dayNightText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
     dayNightTextNight: { color: '#FFD700' },
-    zoomControls: {
-        backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, padding: 6,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4,
-    },
-    controlBtn: {
-        width: 44, height: 44, borderRadius: 22, backgroundColor: '#E8F5E9',
-        alignItems: 'center', justifyContent: 'center', marginVertical: 3,
-    },
-    controlsHint: {
-        position: 'absolute', bottom: 180, left: 0, right: 0,
+    zoomContainer: {
+        position: 'absolute', right: 16, top: 200,
+        backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 12, padding: 4,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 3,
         alignItems: 'center',
     },
-    controlsHintText: {
-        color: 'white', fontSize: 14, fontWeight: '500',
-        textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 2, height: 2 }, textShadowRadius: 4,
+    zoomBtn: {
+        width: 40, height: 40, borderRadius: 20, backgroundColor: '#E8F5E9',
+        alignItems: 'center', justifyContent: 'center', marginVertical: 2,
     },
     fabContainer: { alignSelf: 'center', marginBottom: 100 },
     fab: {

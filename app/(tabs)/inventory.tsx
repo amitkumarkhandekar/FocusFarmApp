@@ -48,7 +48,7 @@ export default function InventoryScreen() {
                             <Text style={[styles.animalName, { color: colors.text }]}>{item.name}</Text>
                             <Text style={[styles.animalCount, { color: colors.textSecondary }]}>x{item.count} on your farm</Text>
                         </View>
-                        <TouchableOpacity style={[styles.infoButton, { backgroundColor: colors.primaryLight }]}>
+                        <TouchableOpacity style={styles.infoButton}>
                             <Info size={18} color={colors.textSecondary} />
                         </TouchableOpacity>
                     </View>

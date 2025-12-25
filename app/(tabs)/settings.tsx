@@ -12,7 +12,7 @@ import {
     Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Settings, Bell, Clock, Shield, Cloud, RefreshCw, Tag, Plus, X, Trash2, Moon, User, Edit2 } from 'lucide-react-native';
+import { Settings, Bell, Clock, Shield, Cloud, RefreshCw, Tag, Plus, X, Trash2, Moon, User, Edit2, Target } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFarm, Category } from '../../context/FarmContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -28,7 +28,7 @@ const CATEGORY_ICONS = [
 ];
 
 export default function SettingsScreen() {
-    const { state, refreshState, addCategory, deleteCategory } = useFarm();
+    const { state, refreshState, addCategory, deleteCategory, updateGoalTargets } = useFarm();
     const { colors, isDark, setDarkTheme: setGlobalDarkTheme } = useTheme();
 
     const [pauseOnLeave, setPauseOnLeave] = useState(true);
@@ -48,6 +48,18 @@ export default function SettingsScreen() {
     const [selectedColor, setSelectedColor] = useState(CATEGORY_COLORS[0]);
     const [selectedIcon, setSelectedIcon] = useState(CATEGORY_ICONS[0]);
     const [isAddingCategory, setIsAddingCategory] = useState(false);
+
+    // Goal settings state
+    const [dailyTarget, setDailyTarget] = useState(state.dailyGoalTarget.toString());
+    const [weeklyTarget, setWeeklyTarget] = useState(state.weeklyGoalTarget.toString());
+    const [monthlyTarget, setMonthlyTarget] = useState(state.monthlyGoalTarget.toString());
+    const [isSavingGoals, setIsSavingGoals] = useState(false);
+
+    useEffect(() => {
+        setDailyTarget(state.dailyGoalTarget.toString());
+        setWeeklyTarget(state.weeklyGoalTarget.toString());
+        setMonthlyTarget(state.monthlyGoalTarget.toString());
+    }, [state.dailyGoalTarget, state.weeklyGoalTarget, state.monthlyGoalTarget]);
 
     useEffect(() => {
         const loadSettings = async () => {
@@ -90,7 +102,7 @@ export default function SettingsScreen() {
         if (setting === 'vibrateOnLeave') setVibrateOnLeave(value);
         if (setting === 'darkTheme') {
             setDarkTheme(value);
-            setGlobalDarkTheme(value); // Apply theme globally
+            setGlobalDarkTheme(value);
         }
 
         saveSettings(newSettings);
@@ -98,11 +110,7 @@ export default function SettingsScreen() {
 
     const handleSaveProfile = async () => {
         if (editingName.trim()) {
-            setUserName(editingName.trim());
-            const saved = await AsyncStorage.getItem('focusSettings');
-            const settings = saved ? JSON.parse(saved) : {};
-            settings.userName = editingName.trim();
-            await AsyncStorage.setItem('focusSettings', JSON.stringify(settings));
+            await setUserName(editingName.trim());
         }
         setShowProfileModal(false);
     };
@@ -151,6 +159,22 @@ export default function SettingsScreen() {
         );
     };
 
+    const handleSaveGoals = async () => {
+        const daily = parseFloat(dailyTarget);
+        const weekly = parseFloat(weeklyTarget);
+        const monthly = parseFloat(monthlyTarget);
+
+        if (isNaN(daily) || isNaN(weekly) || isNaN(monthly)) {
+            Alert.alert('Error', 'Please enter valid numbers for goals');
+            return;
+        }
+
+        setIsSavingGoals(true);
+        await updateGoalTargets(daily, weekly, monthly);
+        setIsSavingGoals(false);
+        Alert.alert('Success', 'Goal targets updated successfully!');
+    };
+
     const formatLastSync = () => {
         if (!state.lastSyncTime) return 'Never';
         const date = new Date(state.lastSyncTime);
@@ -187,9 +211,56 @@ export default function SettingsScreen() {
                     </TouchableOpacity>
                 </View>
 
-                {/* Sync Section */}
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Cloud Sync</Text>
+                {/* Focus Goals Section */}
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Focus Goals</Text>
+                <View style={[styles.settingCard, { backgroundColor: colors.surface, padding: 16 }]}>
+                    <View style={styles.goalInputRow}>
+                        <View style={styles.goalInputGroup}>
+                            <Text style={[styles.goalInputLabel, { color: colors.textSecondary }]}>Daily (hrs)</Text>
+                            <TextInput
+                                style={[styles.goalInput, { backgroundColor: colors.surfaceSecondary, color: colors.text, borderColor: colors.border }]}
+                                value={dailyTarget}
+                                onChangeText={setDailyTarget}
+                                keyboardType="numeric"
+                                placeholder="6"
+                            />
+                        </View>
+                        <View style={styles.goalInputGroup}>
+                            <Text style={[styles.goalInputLabel, { color: colors.textSecondary }]}>Weekly (hrs)</Text>
+                            <TextInput
+                                style={[styles.goalInput, { backgroundColor: colors.surfaceSecondary, color: colors.text, borderColor: colors.border }]}
+                                value={weeklyTarget}
+                                onChangeText={setWeeklyTarget}
+                                keyboardType="numeric"
+                                placeholder="40"
+                            />
+                        </View>
+                        <View style={styles.goalInputGroup}>
+                            <Text style={[styles.goalInputLabel, { color: colors.textSecondary }]}>Monthly (hrs)</Text>
+                            <TextInput
+                                style={[styles.goalInput, { backgroundColor: colors.surfaceSecondary, color: colors.text, borderColor: colors.border }]}
+                                value={monthlyTarget}
+                                onChangeText={setMonthlyTarget}
+                                keyboardType="numeric"
+                                placeholder="160"
+                            />
+                        </View>
+                    </View>
+                    <TouchableOpacity
+                        style={[styles.saveGoalsButton, { backgroundColor: colors.primary }]}
+                        onPress={handleSaveGoals}
+                        disabled={isSavingGoals}
+                    >
+                        {isSavingGoals ? (
+                            <ActivityIndicator size="small" color="#FFF" />
+                        ) : (
+                            <Text style={styles.saveGoalsButtonText}>Save Goals</Text>
+                        )}
+                    </TouchableOpacity>
+                </View>
 
+                {/* Cloud Sync Section */}
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Cloud Sync</Text>
                 <View style={styles.syncCard}>
                     <View style={styles.syncInfo}>
                         <Cloud size={24} color="#1976D2" />
@@ -216,7 +287,6 @@ export default function SettingsScreen() {
 
                 {/* Categories Section */}
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Task Categories</Text>
-
                 <View style={[styles.categoriesCard, { backgroundColor: colors.surface }]}>
                     {state.categories.length === 0 ? (
                         <Text style={[styles.noCategoriesText, { color: colors.textSecondary }]}>No custom categories yet</Text>
@@ -245,7 +315,6 @@ export default function SettingsScreen() {
 
                 {/* Focus Mode Settings */}
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Focus Mode</Text>
-
                 <View style={[styles.settingCard, { backgroundColor: colors.surface }]}>
                     <View style={styles.settingRow}>
                         <View style={styles.settingInfo}>
@@ -302,7 +371,6 @@ export default function SettingsScreen() {
 
                 {/* Appearance Settings */}
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Appearance</Text>
-
                 <View style={[styles.settingCard, { backgroundColor: colors.surface }]}>
                     <View style={styles.settingRow}>
                         <View style={styles.settingInfo}>
@@ -322,7 +390,6 @@ export default function SettingsScreen() {
                 </View>
             </ScrollView>
 
-            {/* Profile Edit Modal */}
             <Modal visible={showProfileModal} transparent animationType="fade">
                 <View style={[styles.modalOverlay, { backgroundColor: colors.modalOverlay }]}>
                     <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
@@ -332,84 +399,64 @@ export default function SettingsScreen() {
                                 <X size={24} color={colors.textSecondary} />
                             </TouchableOpacity>
                         </View>
-
                         <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Your Name</Text>
                         <TextInput
                             style={[styles.textInput, { backgroundColor: colors.surfaceSecondary, color: colors.text, borderColor: colors.border }]}
                             value={editingName}
                             onChangeText={setEditingName}
                             placeholder="Enter your name"
-                            placeholderTextColor={colors.textMuted}
                         />
-
-                        <TouchableOpacity
-                            style={[styles.modalButton, { backgroundColor: colors.primary }]}
-                            onPress={handleSaveProfile}
-                        >
+                        <TouchableOpacity style={[styles.modalButton, { backgroundColor: colors.primary }]} onPress={handleSaveProfile}>
                             <Text style={styles.modalButtonText}>Save</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
 
-            {/* Add Category Modal */}
             <Modal visible={showCategoryModal} transparent animationType="fade">
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
+                <View style={[styles.modalOverlay, { backgroundColor: colors.modalOverlay }]}>
+                    <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>New Category</Text>
+                            <Text style={[styles.modalTitle, { color: colors.text }]}>New Category</Text>
                             <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
-                                <X size={24} color="#6B8E6B" />
+                                <X size={24} color={colors.textSecondary} />
                             </TouchableOpacity>
                         </View>
-
-                        <Text style={styles.modalLabel}>Name</Text>
+                        <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Name</Text>
                         <TextInput
-                            style={styles.modalInput}
-                            placeholder="e.g., Coding"
+                            style={[styles.modalInput, { backgroundColor: colors.surfaceSecondary, color: colors.text, borderColor: colors.border }]}
                             value={newCategoryName}
                             onChangeText={setNewCategoryName}
-                            maxLength={20}
+                            placeholder="e.g., Coding"
                         />
-
-                        <Text style={styles.modalLabel}>Icon</Text>
+                        <Text style={[styles.modalLabel, { color: colors.textSecondary, marginTop: 12 }]}>Icon</Text>
                         <View style={styles.iconGrid}>
                             {CATEGORY_ICONS.map((icon) => (
                                 <TouchableOpacity
                                     key={icon}
-                                    style={[styles.iconOption, selectedIcon === icon && styles.iconSelected]}
+                                    style={[styles.iconOption, selectedIcon === icon && styles.iconSelected, { backgroundColor: colors.surfaceSecondary }]}
                                     onPress={() => setSelectedIcon(icon)}
                                 >
                                     <Text style={styles.iconText}>{icon}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
-
-                        <Text style={styles.modalLabel}>Color</Text>
+                        <Text style={[styles.modalLabel, { color: colors.textSecondary, marginTop: 12 }]}>Color</Text>
                         <View style={styles.colorGrid}>
                             {CATEGORY_COLORS.map((color) => (
                                 <TouchableOpacity
                                     key={color}
-                                    style={[
-                                        styles.colorOption,
-                                        { backgroundColor: color },
-                                        selectedColor === color && styles.colorSelected,
-                                    ]}
+                                    style={[styles.colorOption, { backgroundColor: color }, selectedColor === color && styles.colorSelected]}
                                     onPress={() => setSelectedColor(color)}
                                 />
                             ))}
                         </View>
-
                         <TouchableOpacity
-                            style={[styles.modalButton, isAddingCategory && styles.modalButtonDisabled]}
+                            style={[styles.modalButton, { backgroundColor: colors.primary }, isAddingCategory && { opacity: 0.7 }]}
                             onPress={handleAddCategory}
                             disabled={isAddingCategory}
                         >
-                            {isAddingCategory ? (
-                                <ActivityIndicator size="small" color="#FFF" />
-                            ) : (
-                                <Text style={styles.modalButtonText}>Add Category</Text>
-                            )}
+                            {isAddingCategory ? <ActivityIndicator color="#FFF" /> : <Text style={styles.modalButtonText}>Add Category</Text>}
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -419,305 +466,61 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F9FBF9',
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        paddingHorizontal: 24,
-        paddingTop: 16,
-        paddingBottom: 8,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: '800',
-        color: '#2D4A22',
-    },
-    content: {
-        paddingHorizontal: 24,
-        paddingBottom: 120,
-    },
-    sectionTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#556B2F',
-        marginTop: 24,
-    },
-    syncCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#E3F2FD',
-        borderRadius: 16,
-        padding: 16,
-        marginTop: 12,
-    },
-    syncInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        flex: 1,
-    },
-    syncText: {
-        flex: 1,
-    },
-    syncLabel: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: '#1565C0',
-    },
-    syncDesc: {
-        fontSize: 12,
-        color: '#1976D2',
-        marginTop: 2,
-    },
-    syncButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#1976D2',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 20,
-        gap: 6,
-    },
-    syncButtonDisabled: {
-        backgroundColor: '#90CAF9',
-    },
-    syncButtonText: {
-        color: '#FFF',
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    categoriesCard: {
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 16,
-        marginTop: 12,
-        shadowColor: '#2D4A22',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    noCategoriesText: {
-        fontSize: 14,
-        color: '#9CA89C',
-        textAlign: 'center',
-        paddingVertical: 12,
-    },
-    categoryRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E8F5E9',
-    },
-    categoryBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 20,
-        gap: 8,
-    },
-    categoryIcon: {
-        fontSize: 18,
-    },
-    categoryName: {
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    addCategoryButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 14,
-        gap: 6,
-        marginTop: 8,
-    },
-    addCategoryText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#4A7C23',
-    },
-    settingCard: {
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 4,
-        marginTop: 12,
-        shadowColor: '#2D4A22',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    settingRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 14,
-    },
-    settingInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 14,
-        flex: 1,
-    },
-    settingText: {
-        flex: 1,
-    },
-    settingLabel: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: '#2D4A22',
-    },
-    settingDesc: {
-        fontSize: 12,
-        color: '#6B8E6B',
-        marginTop: 2,
-    },
-    divider: {
-        height: 1,
-        backgroundColor: '#E8F5E9',
-        marginHorizontal: 14,
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 24,
-    },
-    modalContent: {
-        backgroundColor: '#FFF',
-        borderRadius: 20,
-        padding: 24,
-        width: '100%',
-        maxWidth: 340,
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    modalTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: '#2D4A22',
-    },
-    modalLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#556B2F',
-        marginTop: 16,
-        marginBottom: 8,
-    },
-    modalInput: {
-        backgroundColor: '#F5F5F5',
-        borderRadius: 12,
-        padding: 14,
-        fontSize: 16,
-        color: '#2D4A22',
-    },
-    iconGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-    },
-    iconOption: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        backgroundColor: '#F5F5F5',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    iconSelected: {
-        backgroundColor: '#E8F5E9',
-        borderWidth: 2,
-        borderColor: '#4A7C23',
-    },
-    iconText: {
-        fontSize: 22,
-    },
-    colorGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 10,
-    },
-    colorOption: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-    },
-    colorSelected: {
-        borderWidth: 3,
-        borderColor: '#2D4A22',
-    },
-    modalButton: {
-        backgroundColor: '#4A7C23',
-        paddingVertical: 14,
-        borderRadius: 12,
-        marginTop: 24,
-        alignItems: 'center',
-    },
-    modalButtonDisabled: {
-        backgroundColor: '#A5D6A7',
-    },
-    modalButtonText: {
-        color: '#FFF',
-        fontSize: 16,
-        fontWeight: '700',
-    },
-    // Profile styles
-    profileCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 16,
-        gap: 14,
-    },
-    profileAvatar: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    profileInfo: {
-        flex: 1,
-    },
-    profileName: {
-        fontSize: 18,
-        fontWeight: '700',
-    },
-    profileSubtitle: {
-        fontSize: 13,
-        marginTop: 2,
-    },
-    editButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    inputLabel: {
-        fontSize: 13,
-        fontWeight: '600',
-        marginBottom: 8,
-        marginTop: 16,
-    },
-    textInput: {
-        borderWidth: 1,
-        borderRadius: 12,
-        padding: 14,
-        fontSize: 16,
-    },
+    container: { flex: 1 },
+    header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 },
+    title: { fontSize: 24, fontWeight: '800' },
+    content: { paddingHorizontal: 24, paddingBottom: 100 },
+    sectionTitle: { fontSize: 16, fontWeight: '700', marginTop: 24, marginBottom: 12 },
+    profileCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 16, gap: 14 },
+    profileAvatar: { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
+    profileInfo: { flex: 1 },
+    profileName: { fontSize: 18, fontWeight: '700' },
+    profileSubtitle: { fontSize: 13, marginTop: 2 },
+    editButton: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+    settingCard: { borderRadius: 16, overflow: 'hidden' },
+    settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
+    settingInfo: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
+    settingText: { flex: 1 },
+    settingLabel: { fontSize: 15, fontWeight: '600' },
+    settingDesc: { fontSize: 12, marginTop: 2 },
+    divider: { height: 1 },
+    syncCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 16, padding: 16, marginTop: 12 },
+    syncInfo: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+    syncText: { flex: 1 },
+    syncLabel: { fontSize: 15, fontWeight: '600', color: '#1565C0' },
+    syncDesc: { fontSize: 12, color: '#1976D2', marginTop: 2 },
+    syncButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1976D2', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, gap: 6 },
+    syncButtonDisabled: { opacity: 0.6 },
+    syncButtonText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
+    categoriesCard: { borderRadius: 16, padding: 16 },
+    noCategoriesText: { fontSize: 14, textAlign: 'center', paddingVertical: 12 },
+    categoryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1 },
+    categoryBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 15, gap: 6 },
+    categoryIcon: { fontSize: 16 },
+    categoryName: { fontSize: 14, fontWeight: '600' },
+    addCategoryButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, gap: 6, marginTop: 8 },
+    addCategoryText: { fontSize: 14, fontWeight: '600' },
+    modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+    modalContent: { borderRadius: 20, padding: 24, width: '100%', maxWidth: 400 },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    modalTitle: { fontSize: 20, fontWeight: '700' },
+    inputLabel: { fontSize: 14, fontWeight: '600', marginBottom: 8 },
+    textInput: { borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 16 },
+    modalButton: { paddingVertical: 14, borderRadius: 12, marginTop: 20, alignItems: 'center' },
+    modalButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+    modalLabel: { fontSize: 14, fontWeight: '600' },
+    modalInput: { borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 16 },
+    iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+    iconOption: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    iconSelected: { borderWidth: 2, borderColor: '#4A7C23' },
+    iconText: { fontSize: 20 },
+    colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 8 },
+    colorOption: { width: 34, height: 34, borderRadius: 17 },
+    colorSelected: { borderWidth: 3, borderColor: '#333' },
+    goalInputRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginBottom: 16 },
+    goalInputGroup: { flex: 1 },
+    goalInputLabel: { fontSize: 12, fontWeight: '600', marginBottom: 6 },
+    goalInput: { borderWidth: 1, borderRadius: 10, padding: 10, fontSize: 16, textAlign: 'center' },
+    saveGoalsButton: { paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
+    saveGoalsButtonText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
 });

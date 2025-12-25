@@ -9,17 +9,75 @@ export default function GoalsScreen() {
     const {
         state,
         claimDailyReward,
+        claimWeeklyReward,
+        claimMonthlyReward,
         convertHensToGoat,
         convertHensToCow,
+        getSessions,
     } = useFarm();
+
+    const [weeklyMinutes, setWeeklyMinutes] = React.useState(0);
+    const [monthlyMinutes, setMonthlyMinutes] = React.useState(0);
+    const [isLoadingStats, setIsLoadingStats] = React.useState(true);
 
     // Convert minutes to hours for display
     const todayHours = state.todayMinutes / 60;
+    const weeklyHours = (weeklyMinutes + state.todayMinutes) / 60;
+    const monthlyHours = (monthlyMinutes + state.todayMinutes) / 60;
 
-    // Goal targets in hours
-    const DAILY_TARGET = 6;
+    // Goal targets from context
+    const DAILY_TARGET = state.dailyGoalTarget;
+    const WEEKLY_TARGET = state.weeklyGoalTarget;
+    const MONTHLY_TARGET = state.monthlyGoalTarget;
+
+    React.useEffect(() => {
+        const fetchStats = async () => {
+            setIsLoadingStats(true);
+            try {
+                // Fetch sessions for the last 30 days
+                const sessions = await getSessions(31);
+
+                const now = new Date();
+                const startOfWeek = new Date(now);
+                startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday as start of week
+                startOfWeek.setHours(0, 0, 0, 0);
+
+                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+                let weekSum = 0;
+                let monthSum = 0;
+
+                const todayStr = now.toDateString();
+
+                sessions.forEach(session => {
+                    const sessionDate = new Date(session.started_at);
+
+                    // Don't include today's minutes as they are already in state.todayMinutes
+                    if (sessionDate.toDateString() === todayStr) return;
+
+                    if (sessionDate >= startOfWeek) {
+                        weekSum += session.duration_minutes;
+                    }
+                    if (sessionDate >= startOfMonth) {
+                        monthSum += session.duration_minutes;
+                    }
+                });
+
+                setWeeklyMinutes(weekSum);
+                setMonthlyMinutes(monthSum);
+            } catch (error) {
+                console.error('Error fetching stats:', error);
+            }
+            setIsLoadingStats(false);
+        };
+
+        fetchStats();
+    }, [state.todayMinutes]);
 
     const dailyProgress = Math.min((todayHours / DAILY_TARGET) * 100, 100);
+    const weeklyProgress = Math.min((weeklyHours / WEEKLY_TARGET) * 100, 100);
+    const monthlyProgress = Math.min((monthlyHours / MONTHLY_TARGET) * 100, 100);
+
     const canClaimDaily = todayHours >= DAILY_TARGET && !state.dailyGoalClaimed;
 
     const handleClaimDaily = () => {
@@ -82,7 +140,7 @@ export default function GoalsScreen() {
 
     const { colors } = useTheme();
 
-    if (state.isLoading) {
+    if (state.isLoading || isLoadingStats) {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
                 <View style={styles.loadingContainer}>
@@ -114,7 +172,7 @@ export default function GoalsScreen() {
                             <Text style={styles.goalEmoji}>🌅</Text>
                             <View>
                                 <Text style={[styles.goalTitle, { color: colors.text }]}>Daily Goal</Text>
-                                <Text style={[styles.goalSubtitle, { color: colors.textSecondary }]}>Focus for 6 hours today</Text>
+                                <Text style={[styles.goalSubtitle, { color: colors.textSecondary }]}>Focus for {DAILY_TARGET} hours today</Text>
                             </View>
                         </View>
                         {state.dailyGoalClaimed ? (
@@ -130,32 +188,58 @@ export default function GoalsScreen() {
                         ) : null}
                     </View>
                     <View style={[styles.progressBarContainer, { backgroundColor: colors.border }]}>
-                        {/* Base progress (up to 6 hours) */}
-                        <View style={[styles.progressBar, { width: `${Math.min(dailyProgress, 100)}%`, backgroundColor: colors.primary }]} />
-                        {/* Overtime progress (beyond 6 hours) - shown in different color */}
-                        {todayHours > DAILY_TARGET && (
-                            <View style={[
-                                styles.overtimeBar,
-                                {
-                                    width: `${Math.min(((todayHours - DAILY_TARGET) / DAILY_TARGET) * 100, 100)}%`,
-                                    left: '100%',
-                                }
-                            ]} />
-                        )}
+                        <View style={[styles.progressBar, { width: `${dailyProgress}%`, backgroundColor: colors.primary }]} />
                     </View>
                     <View style={styles.progressRow}>
                         <Text style={[styles.progressText, { color: colors.textSecondary }]}>
                             {formatHours(todayHours)}{todayHours >= DAILY_TARGET ? ' 🎉' : ` / ${DAILY_TARGET} hrs`}
                         </Text>
-                        {todayHours > DAILY_TARGET && (
-                            <Text style={styles.overtimeText}>
-                                +{formatHours(todayHours - DAILY_TARGET)} overtime!
-                            </Text>
-                        )}
-                        <View style={[styles.rewardHint, { backgroundColor: colors.accentLight }]}>
+                        <View style={styles.rewardHint}>
                             <Text style={styles.rewardEmoji}>🐔</Text>
                             <Text style={[styles.rewardText, { color: colors.accent }]}>+1 Hen</Text>
                         </View>
+                    </View>
+                </View>
+
+                {/* Weekly Goal */}
+                <View style={[styles.goalCard, { backgroundColor: colors.surface }]}>
+                    <View style={styles.goalHeader}>
+                        <View style={styles.goalInfo}>
+                            <Text style={styles.goalEmoji}>📅</Text>
+                            <View>
+                                <Text style={[styles.goalTitle, { color: colors.text }]}>Weekly Goal</Text>
+                                <Text style={[styles.goalSubtitle, { color: colors.textSecondary }]}>Focus for {WEEKLY_TARGET} hours this week</Text>
+                            </View>
+                        </View>
+                    </View>
+                    <View style={[styles.progressBarContainer, { backgroundColor: colors.border }]}>
+                        <View style={[styles.progressBar, { width: `${weeklyProgress}%`, backgroundColor: '#42A5F5' }]} />
+                    </View>
+                    <View style={styles.progressRow}>
+                        <Text style={[styles.progressText, { color: colors.textSecondary }]}>
+                            {formatHours(weeklyHours)}{weeklyHours >= WEEKLY_TARGET ? ' 🏆' : ` / ${WEEKLY_TARGET} hrs`}
+                        </Text>
+                    </View>
+                </View>
+
+                {/* Monthly Goal */}
+                <View style={[styles.goalCard, { backgroundColor: colors.surface }]}>
+                    <View style={styles.goalHeader}>
+                        <View style={styles.goalInfo}>
+                            <Text style={styles.goalEmoji}>🥇</Text>
+                            <View>
+                                <Text style={[styles.goalTitle, { color: colors.text }]}>Monthly Goal</Text>
+                                <Text style={[styles.goalSubtitle, { color: colors.textSecondary }]}>Focus for {MONTHLY_TARGET} hours this month</Text>
+                            </View>
+                        </View>
+                    </View>
+                    <View style={[styles.progressBarContainer, { backgroundColor: colors.border }]}>
+                        <View style={[styles.progressBar, { width: `${monthlyProgress}%`, backgroundColor: '#9C27B0' }]} />
+                    </View>
+                    <View style={styles.progressRow}>
+                        <Text style={[styles.progressText, { color: colors.textSecondary }]}>
+                            {formatHours(monthlyHours)}{monthlyHours >= MONTHLY_TARGET ? ' 👑' : ` / ${MONTHLY_TARGET} hrs`}
+                        </Text>
                     </View>
                 </View>
 
