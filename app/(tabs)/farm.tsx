@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { Play, ZoomIn, ZoomOut, Sparkles, Sun, Moon, X, Volume2, VolumeX } from 'lucide-react-native';
 import { useFarm } from '../../context/FarmContext';
 import { useTheme } from '../../context/ThemeContext';
+import { FARM_3D_HTML } from '../../assets/farm3d_html';
 
 // ============================================
 // CREATE COW - Ultra Realistic with full details
@@ -2078,17 +2079,22 @@ export default function FarmScreen() {
         webViewRef.current?.postMessage(JSON.stringify({ type: 'zoom', delta: 15 }));
     };
 
-    const farm3dHtml = require('../../assets/farm3d.html');
+    // We now use the imported FARM_3D_HTML constant instead of a relative local file requirement
+    // to improve reliability on Android internal storage resolution.
 
     return (
         <View style={styles.container}>
             <WebView
                 ref={webViewRef}
-                source={farm3dHtml}
+                source={{ html: FARM_3D_HTML }}
                 style={{ flex: 1 }}
                 javaScriptEnabled={true}
                 domStorageEnabled={true}
                 originWhitelist={['*']}
+                allowFileAccess={true}
+                allowFileAccessFromFileURLs={true}
+                allowUniversalAccessFromFileURLs={true}
+                mixedContentMode="always"
                 onLoad={() => {
                     // Send initial state after load
                     setTimeout(() => {
