@@ -101,14 +101,39 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         const initializeUser = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                setUserId(user.id);
-                await loadStateFromSupabase(user.id);
-                await loadCategories(user.id);
-                await loadGoalTargets();
-                await loadClaimStatuses();
-            } else {
+            try {
+                const { data: { user }, error } = await supabase.auth.getUser();
+
+                // Handle refresh token errors
+                if (error) {
+                    console.log('Auth error during initialization:', error.message);
+                    // If refresh token is invalid, sign out and clear session
+                    if (error.message.includes('Refresh Token') || error.message.includes('refresh_token')) {
+                        console.log('Invalid refresh token, clearing session...');
+                        await supabase.auth.signOut();
+                        await AsyncStorage.removeItem('focusSettings');
+                    }
+                    setState(prev => ({ ...prev, isLoading: false }));
+                    return;
+                }
+
+                if (user) {
+                    setUserId(user.id);
+                    await loadStateFromSupabase(user.id);
+                    await loadCategories(user.id);
+                    await loadGoalTargets();
+                    await loadClaimStatuses();
+                } else {
+                    setState(prev => ({ ...prev, isLoading: false }));
+                }
+            } catch (err: any) {
+                console.error('Error initializing user:', err);
+                // Handle any auth errors by clearing session
+                if (err?.message?.includes('Refresh Token') || err?.message?.includes('refresh_token')) {
+                    console.log('Clearing invalid session...');
+                    await supabase.auth.signOut().catch(() => { });
+                    await AsyncStorage.removeItem('focusSettings').catch(() => { });
+                }
                 setState(prev => ({ ...prev, isLoading: false }));
             }
         };
@@ -116,6 +141,14 @@ export function FarmProvider({ children }: { children: ReactNode }) {
         initializeUser();
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            // Handle token refresh errors
+            if (event === 'TOKEN_REFRESHED' && !session) {
+                console.log('Token refresh failed, signing out...');
+                setUserId(null);
+                setState({ ...defaultState, isLoading: false });
+                return;
+            }
+
             if (session?.user) {
                 setUserId(session.user.id);
                 await loadStateFromSupabase(session.user.id);

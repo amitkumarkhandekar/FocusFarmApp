@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import React from 'react';
 import { FarmProvider } from '../context/FarmContext';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
+import VersionCheck from '../components/VersionCheck';
 
 function AppContent() {
     const { isDark } = useTheme();
@@ -26,6 +27,13 @@ function AppContent() {
                         animation: 'fade',
                     }}
                 />
+                <Stack.Screen
+                    name="focus-start"
+                    options={{
+                        presentation: 'modal',
+                        animation: 'slide_from_bottom',
+                    }}
+                />
             </Stack>
         </>
     );
@@ -35,7 +43,9 @@ export default function RootLayout() {
     return (
         <ThemeProvider>
             <FarmProvider>
-                <AppContent />
+                <VersionCheck>
+                    <AppContent />
+                </VersionCheck>
             </FarmProvider>
         </ThemeProvider>
     );

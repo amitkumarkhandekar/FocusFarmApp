@@ -4,7 +4,6 @@ import {
     Text,
     StyleSheet,
     TouchableOpacity,
-    TouchableWithoutFeedback,
     Animated,
     Alert,
     Dimensions,
@@ -18,53 +17,89 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Pause, Play, X, Leaf, Check, AlertTriangle, Skull } from 'lucide-react-native';
 import { useFarm } from '../context/FarmContext';
 import * as Brightness from 'expo-brightness';
-import { useKeepAwake } from 'expo-keep-awake';
 import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CIRCLE_SIZE = SCREEN_WIDTH * 0.65;
-const SCREEN_DIM_TIMEOUT = 30000; // 30 seconds
-const DIM_BRIGHTNESS = 0; // Complete screen off
+const CIRCLE_SIZE = SCREEN_WIDTH * 0.55;
+
+// 6 hours in seconds = 21600 seconds
+const SIX_HOURS_SECONDS = 6 * 60 * 60;
 
 const MOTIVATIONAL_QUOTES = [
-    "Stay focused, your farm is growing! 🌱",
-    "Every minute counts towards your goals! 🎯",
-    "Your animals are cheering you on! 🐔",
+    "Your chick is growing! Keep going! 🐣",
+    "Almost there! Your hen is waiting! 🐔",
+    "Every minute makes your chick bigger! 🌱",
     "Great things take time... keep going! 💪",
     "Focus now, celebrate later! 🎉",
 ];
 
+// Chicken growth stages based on progress (0-1)
+const getChickenEmoji = (progress: number): string => {
+    if (progress >= 1) return '🐔'; // Full grown hen
+    if (progress >= 0.8) return '🐓'; // Almost adult
+    if (progress >= 0.6) return '🐥'; // Older chick
+    if (progress >= 0.4) return '🐤'; // Young chick
+    if (progress >= 0.2) return '🐣'; // Baby chick hatching
+    return '🥚'; // Egg
+};
+
+// Get size multiplier based on progress
+const getChickenSize = (progress: number): number => {
+    // Start at 0.5x, grow to 1.5x at full size
+    return 0.5 + (progress * 1);
+};
+
+// Get chicken stage description
+const getChickenStage = (progress: number): string => {
+    if (progress >= 1) return 'Full Grown Hen! 🎉';
+    if (progress >= 0.8) return 'Almost There!';
+    if (progress >= 0.6) return 'Growing Fast!';
+    if (progress >= 0.4) return 'Getting Bigger!';
+    if (progress >= 0.2) return 'Hatching...';
+    return 'Fresh Egg';
+};
+
 export default function FocusScreen() {
-    // NOTE: Removed useKeepAwake() to allow device's natural screen timeout behavior
+    // NOTE: No useKeepAwake() - allows device's natural screen timeout
 
     const router = useRouter();
     const params = useLocalSearchParams<{ taskName?: string; categoryId?: string; categoryName?: string }>();
-    const { addStudyTime, saveSession, applyPenalty, state } = useFarm();
+    const { addStudyTime, saveSession, applyPenalty, claimDailyReward, state } = useFarm();
+    const { colors, isDark } = useTheme();
+
+    // Initialize elapsed seconds with today's accumulated minutes
+    const initialSeconds = (state.todayMinutes || 0) * 60;
 
     const [isRunning, setIsRunning] = useState(true);
-    const [elapsedSeconds, setElapsedSeconds] = useState(0);
+    const [elapsedSeconds, setElapsedSeconds] = useState(0); // Session time only
+    const [totalSeconds, setTotalSeconds] = useState(initialSeconds); // Today's total including previous
     const [quote] = useState(MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)]);
     const [showLeaveWarning, setShowLeaveWarning] = useState(false);
     const [showPenaltyWarning, setShowPenaltyWarning] = useState(false);
+    const [showHenEarnedModal, setShowHenEarnedModal] = useState(false);
+    const [henJustEarned, setHenJustEarned] = useState(false);
     const [leaveCount, setLeaveCount] = useState(0);
     const [sessionStartTime] = useState(new Date());
-    const [isScreenDimmed, setIsScreenDimmed] = useState(false);
 
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const shakeAnim = useRef(new Animated.Value(0)).current;
+    const chickenScaleAnim = useRef(new Animated.Value(1)).current;
     const appState = useRef(AppState.currentState);
     const backgroundStartTime = useRef<number | null>(null);
     const lastElapsedRef = useRef(0);
     const originalBrightness = useRef<number>(0.7);
-    const dimTimeout = useRef<NodeJS.Timeout | null>(null);
+
+    // Calculate progress towards 6 hours (use remaining within current 6-hour cycle)
+    const progressTowardsHen = (totalSeconds % SIX_HOURS_SECONDS) / SIX_HOURS_SECONDS;
+    const currentChickenProgress = Math.min(progressTowardsHen, 1);
 
     // Keep elapsedSeconds in sync with ref for background calculation
     useEffect(() => {
         lastElapsedRef.current = elapsedSeconds;
     }, [elapsedSeconds]);
 
-    // Screen brightness management
+    // Screen brightness - save original but don't keep awake
     useEffect(() => {
         const initBrightness = async () => {
             try {
@@ -80,62 +115,38 @@ export default function FocusScreen() {
 
         return () => {
             // Restore brightness when leaving
-            if (dimTimeout.current) clearTimeout(dimTimeout.current);
             Brightness.setBrightnessAsync(originalBrightness.current).catch(() => { });
         };
     }, []);
 
-    // Auto-dim after inactivity
-    const resetDimTimer = useCallback(() => {
-        if (dimTimeout.current) clearTimeout(dimTimeout.current);
-
-        // Restore brightness if dimmed
-        if (isScreenDimmed) {
-            Brightness.setBrightnessAsync(originalBrightness.current).catch(() => { });
-            setIsScreenDimmed(false);
-        }
-
-        // Set new dim timer
-        dimTimeout.current = setTimeout(() => {
-            if (isRunning) {
-                Brightness.setBrightnessAsync(DIM_BRIGHTNESS).catch(() => { });
-                setIsScreenDimmed(true);
-            }
-        }, SCREEN_DIM_TIMEOUT);
-    }, [isRunning, isScreenDimmed]);
-
-    // Reset dim timer on mount and when running changes
+    // Check if hen was earned
     useEffect(() => {
-        if (isRunning) {
-            resetDimTimer();
+        const previousHens = Math.floor((totalSeconds - elapsedSeconds) / SIX_HOURS_SECONDS);
+        const currentHens = Math.floor(totalSeconds / SIX_HOURS_SECONDS);
+
+        if (currentHens > previousHens && !henJustEarned) {
+            // User just crossed 6 hours threshold!
+            setHenJustEarned(true);
+            setShowHenEarnedModal(true);
+
+            // Celebration animation
+            Animated.sequence([
+                Animated.spring(chickenScaleAnim, { toValue: 1.5, useNativeDriver: true }),
+                Animated.spring(chickenScaleAnim, { toValue: 1, useNativeDriver: true }),
+            ]).start();
+
+            Vibration.vibrate([0, 200, 100, 200, 100, 400]);
         }
-        return () => {
-            if (dimTimeout.current) clearTimeout(dimTimeout.current);
-        };
-    }, [isRunning]);
-
-    const handleScreenTouch = () => {
-        resetDimTimer();
-    };
-
+    }, [totalSeconds]);
 
     // App State Detection - Timer CONTINUES even in background
-    // Only track when user leaves and show warning when returning
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-            // Going to background/inactive (screen off or app minimized)
+            // Going to background/inactive
             if (appState.current === 'active' && nextAppState.match(/inactive|background/)) {
                 if (isRunning) {
-                    // Record when we went to background
                     backgroundStartTime.current = Date.now();
-
-                    // Vibrate as warning that user left
                     Vibration.vibrate([0, 100, 50, 100]);
-
-                    // DO NOT stop the timer - it continues conceptually
-                    // We'll add the background time when returning
-
-                    // Count as a leave
                     setLeaveCount(prev => prev + 1);
                 }
             }
@@ -146,21 +157,16 @@ export default function FocusScreen() {
                     const timeAwayMs = Date.now() - backgroundStartTime.current;
                     const timeAwaySec = Math.floor(timeAwayMs / 1000);
 
-                    // Add the time spent in background to elapsed
-                    // Timer was "running" the whole time
                     setElapsedSeconds(prev => prev + timeAwaySec);
+                    setTotalSeconds(prev => prev + timeAwaySec);
 
-                    // Only show warning if away for more than 5 seconds
-                    // (quick screen lock might be unintentional)
                     if (timeAwaySec > 5) {
                         setShowLeaveWarning(true);
 
-                        // Check if penalty needed (3+ leaves)
                         if (leaveCount >= 3 && state.hens > 0) {
                             setShowPenaltyWarning(true);
                         }
 
-                        // Shake animation
                         Animated.sequence([
                             Animated.timing(shakeAnim, { toValue: 15, duration: 50, useNativeDriver: true }),
                             Animated.timing(shakeAnim, { toValue: -15, duration: 50, useNativeDriver: true }),
@@ -180,6 +186,7 @@ export default function FocusScreen() {
         return () => subscription.remove();
     }, [isRunning, state.hens, leaveCount]);
 
+    // Animations
     useEffect(() => {
         Animated.timing(fadeAnim, {
             toValue: 1,
@@ -205,12 +212,14 @@ export default function FocusScreen() {
         }
     }, [isRunning]);
 
+    // Timer
     useEffect(() => {
         let interval: NodeJS.Timeout;
 
         if (isRunning) {
             interval = setInterval(() => {
                 setElapsedSeconds(prev => prev + 1);
+                setTotalSeconds(prev => prev + 1);
             }, 1000);
         }
 
@@ -226,6 +235,13 @@ export default function FocusScreen() {
             return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
         }
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const formatTimeRemaining = () => {
+        const remaining = SIX_HOURS_SECONDS - (totalSeconds % SIX_HOURS_SECONDS);
+        const hrs = Math.floor(remaining / 3600);
+        const mins = Math.floor((remaining % 3600) / 60);
+        return `${hrs}h ${mins}m to next hen`;
     };
 
     const handlePause = () => {
@@ -255,9 +271,11 @@ export default function FocusScreen() {
             ? `\n\n⚠️ You left the app ${leaveCount} time(s).`
             : '\n\n✨ Perfect focus session!';
 
+        const henMessage = henJustEarned ? '\n\n🐔 You earned a new hen!' : '';
+
         Alert.alert(
             "Great Work! 🎉",
-            `You focused for ${formatTime(elapsedSeconds)}!${leaveMessage}\n\nThis time will be added to your goals.`,
+            `You focused for ${formatTime(elapsedSeconds)}!${leaveMessage}${henMessage}\n\nThis time will be added to your goals.`,
             [
                 {
                     text: "Save & Exit",
@@ -270,6 +288,13 @@ export default function FocusScreen() {
                             taskName: params.taskName,
                             categoryId: params.categoryId,
                         });
+
+                        // Check if daily goal reached and claim reward
+                        const newTotalMinutes = state.todayMinutes + minutes;
+                        if (newTotalMinutes >= state.dailyGoalTarget * 60 && !state.dailyGoalClaimed) {
+                            claimDailyReward();
+                        }
+
                         router.replace('/(tabs)/farm');
                     }
                 },
@@ -288,13 +313,21 @@ export default function FocusScreen() {
             categoryId: params.categoryId,
         });
 
+        // Check if daily goal reached
+        const newTotalMinutes = state.todayMinutes + minutes;
+        if (newTotalMinutes >= state.dailyGoalTarget * 60 && !state.dailyGoalClaimed) {
+            claimDailyReward();
+        }
+
         const leaveMessage = leaveCount > 0
             ? `\n\n⚠️ You left ${leaveCount} time(s).`
             : '';
 
+        const henMessage = henJustEarned ? '\n\n🐔 You earned a new hen!' : '';
+
         Alert.alert(
             "Session Saved! 🌟",
-            `${minutes} minutes added to your goals.${leaveMessage}`,
+            `${minutes} minutes added to your goals.${leaveMessage}${henMessage}`,
             [{ text: "Back to Farm", onPress: () => router.replace('/(tabs)/farm') }]
         );
     };
@@ -314,7 +347,13 @@ export default function FocusScreen() {
         );
     };
 
-    const { colors, isDark } = useTheme();
+    const handleHenEarnedContinue = () => {
+        setShowHenEarnedModal(false);
+    };
+
+    const chickenEmoji = getChickenEmoji(currentChickenProgress);
+    const chickenSize = getChickenSize(currentChickenProgress);
+    const chickenStage = getChickenStage(currentChickenProgress);
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -354,27 +393,61 @@ export default function FocusScreen() {
                     <Text style={[styles.quote, { color: colors.textSecondary }]}>{quote}</Text>
                 </View>
 
+                {/* Growing Chicken Display */}
+                <View style={styles.chickenContainer}>
+                    <View style={[styles.chickenCircle, { backgroundColor: colors.surface }]}>
+                        <Animated.Text style={[
+                            styles.chickenEmoji,
+                            {
+                                fontSize: 60 * chickenSize,
+                                transform: [{ scale: chickenScaleAnim }]
+                            }
+                        ]}>
+                            {chickenEmoji}
+                        </Animated.Text>
+                        <Text style={[styles.chickenStage, { color: colors.primary }]}>{chickenStage}</Text>
+
+                        {/* Progress bar */}
+                        <View style={[styles.progressBarContainer, { backgroundColor: colors.border }]}>
+                            <View
+                                style={[
+                                    styles.progressBarFill,
+                                    {
+                                        width: `${currentChickenProgress * 100}%`,
+                                        backgroundColor: currentChickenProgress >= 1 ? colors.accent : colors.primary
+                                    }
+                                ]}
+                            />
+                        </View>
+                        <Text style={[styles.timeRemaining, { color: colors.textMuted }]}>
+                            {currentChickenProgress >= 1 ? '🎉 Hen earned!' : formatTimeRemaining()}
+                        </Text>
+                    </View>
+                </View>
+
                 {/* Timer Circle */}
                 <View style={styles.timerContainer}>
                     <Animated.View
                         style={[
                             styles.timerCircle,
-                            { transform: [{ scale: pulseAnim }], backgroundColor: isDark ? colors.primary : '#4A7C23' },
+                            { transform: [{ scale: pulseAnim }], backgroundColor: isDark ? colors.surface : '#FFF' },
                             !isRunning && styles.timerCirclePaused
                         ]}
                     >
                         <View style={styles.timerInner}>
-                            <Text style={styles.timeText}>{formatTime(elapsedSeconds)}</Text>
-                            <Text style={[styles.statusText, !isRunning && styles.statusTextPaused]}>
+                            <Text style={[styles.timeLabel, { color: colors.textSecondary }]}>This Session</Text>
+                            <Text style={[styles.timeText, { color: colors.text }]}>{formatTime(elapsedSeconds)}</Text>
+                            <Text style={[styles.statusText, { color: colors.primary }, !isRunning && styles.statusTextPaused]}>
                                 {isRunning ? 'Focusing...' : 'Paused'}
                             </Text>
                         </View>
                     </Animated.View>
                 </View>
 
-                {/* Focus Tip */}
-                <View style={[styles.tipContainer, { backgroundColor: colors.accentLight }]}>
-                    <Text style={[styles.tipText, { color: isDark ? colors.accent : '#8B6B00' }]}>⚠️ Leaving the app will pause timer & count as distraction</Text>
+                {/* Today's Total */}
+                <View style={[styles.todayTotal, { backgroundColor: colors.surface }]}>
+                    <Text style={[styles.todayLabel, { color: colors.textSecondary }]}>Today's Total:</Text>
+                    <Text style={[styles.todayValue, { color: colors.primary }]}>{formatTime(totalSeconds)}</Text>
                 </View>
 
                 {/* Controls */}
@@ -400,16 +473,6 @@ export default function FocusScreen() {
                         </TouchableOpacity>
                     )}
                 </View>
-
-                {/* Time Info */}
-                <View style={[styles.progressInfo, { backgroundColor: colors.surface }]}>
-                    <Text style={[styles.progressText, { color: colors.textSecondary }]}>
-                        {elapsedSeconds >= 60
-                            ? `${Math.floor(elapsedSeconds / 60)} min will be saved`
-                            : 'Focus for at least 1 min to save'
-                        }
-                    </Text>
-                </View>
             </Animated.View>
 
             {/* Leave Warning Modal */}
@@ -419,7 +482,7 @@ export default function FocusScreen() {
                         <Text style={styles.modalEmoji}>😔</Text>
                         <Text style={[styles.modalTitle, { color: colors.text }]}>You left the app!</Text>
                         <Text style={[styles.modalMessage, { color: colors.textSecondary }]}>
-                            Your timer was paused. Each time you leave counts as a distraction.
+                            Your timer continued in the background. Each time you leave counts as a distraction.
                             {leaveCount >= 3 && '\n\n🐔 You lost 1 hen as a penalty!'}
                         </Text>
                         <View style={styles.modalStats}>
@@ -429,7 +492,7 @@ export default function FocusScreen() {
                             </View>
                             <View style={[styles.modalStat, { backgroundColor: colors.primaryLight }]}>
                                 <Text style={[styles.modalStatValue, { color: colors.text }]}>{formatTime(elapsedSeconds)}</Text>
-                                <Text style={[styles.modalStatLabel, { color: colors.textSecondary }]}>Total Time</Text>
+                                <Text style={[styles.modalStatLabel, { color: colors.textSecondary }]}>Session Time</Text>
                             </View>
                         </View>
                         <TouchableOpacity style={[styles.modalButton, { backgroundColor: colors.primary }]} onPress={handleContinueFocus}>
@@ -454,6 +517,22 @@ export default function FocusScreen() {
                     </View>
                 </View>
             </Modal>
+
+            {/* Hen Earned Modal */}
+            <Modal visible={showHenEarnedModal} transparent animationType="fade">
+                <View style={[styles.modalOverlay, { backgroundColor: colors.modalOverlay }]}>
+                    <View style={[styles.modalContent, styles.henEarnedModal, { backgroundColor: colors.surface }]}>
+                        <Text style={styles.henEarnedEmoji}>🐔</Text>
+                        <Text style={[styles.henEarnedTitle, { color: colors.primary }]}>Congratulations!</Text>
+                        <Text style={[styles.henEarnedMessage, { color: colors.textSecondary }]}>
+                            You've studied for 6 hours! A new hen has been added to your farm! 🎉
+                        </Text>
+                        <TouchableOpacity style={[styles.modalButton, { backgroundColor: colors.primary }]} onPress={handleHenEarnedContinue}>
+                            <Text style={styles.modalButtonText}>Keep Going!</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -461,7 +540,6 @@ export default function FocusScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#E8F5E9',
     },
     content: {
         flex: 1,
@@ -479,19 +557,16 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: '#D7ECD7',
         alignItems: 'center',
         justifyContent: 'center',
     },
     headerTitle: {
         fontSize: 18,
         fontWeight: '600',
-        color: '#2D4A22',
     },
     taskBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFF',
         paddingHorizontal: 16,
         paddingVertical: 10,
         borderRadius: 20,
@@ -499,12 +574,10 @@ const styles = StyleSheet.create({
     },
     taskText: {
         fontSize: 14,
-        color: '#2D4A22',
         fontWeight: '600',
     },
     categoryText: {
         fontSize: 14,
-        color: '#6B8E6B',
     },
     leaveWarning: {
         flexDirection: 'row',
@@ -530,14 +603,13 @@ const styles = StyleSheet.create({
     quoteContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFF',
         marginTop: 12,
         marginHorizontal: 24,
         paddingHorizontal: 20,
         paddingVertical: 12,
         borderRadius: 16,
         gap: 10,
-        shadowColor: '#2D4A22',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
         shadowRadius: 8,
@@ -545,10 +617,51 @@ const styles = StyleSheet.create({
     },
     quote: {
         fontSize: 13,
-        color: '#556B2F',
         flex: 1,
         lineHeight: 18,
     },
+
+    // Growing Chicken
+    chickenContainer: {
+        marginTop: 16,
+        alignItems: 'center',
+    },
+    chickenCircle: {
+        width: SCREEN_WIDTH * 0.5,
+        paddingVertical: 20,
+        borderRadius: 24,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+        elevation: 4,
+    },
+    chickenEmoji: {
+        textAlign: 'center',
+    },
+    chickenStage: {
+        fontSize: 14,
+        fontWeight: '700',
+        marginTop: 8,
+    },
+    progressBarContainer: {
+        width: '80%',
+        height: 8,
+        borderRadius: 4,
+        marginTop: 12,
+        overflow: 'hidden',
+    },
+    progressBarFill: {
+        height: '100%',
+        borderRadius: 4,
+    },
+    timeRemaining: {
+        fontSize: 12,
+        marginTop: 8,
+    },
+
+    // Timer
     timerContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -558,10 +671,9 @@ const styles = StyleSheet.create({
         width: CIRCLE_SIZE,
         height: CIRCLE_SIZE,
         borderRadius: CIRCLE_SIZE / 2,
-        backgroundColor: '#FFF',
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#2D4A22',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.15,
         shadowRadius: 30,
@@ -575,38 +687,48 @@ const styles = StyleSheet.create({
     timerInner: {
         alignItems: 'center',
     },
+    timeLabel: {
+        fontSize: 12,
+        marginBottom: 4,
+    },
     timeText: {
-        fontSize: 52,
+        fontSize: 44,
         fontWeight: '200',
-        color: '#2D4A22',
         letterSpacing: -2,
     },
     statusText: {
-        fontSize: 16,
-        color: '#4A7C23',
+        fontSize: 14,
         marginTop: 8,
         fontWeight: '600',
     },
     statusTextPaused: {
         color: '#FF9800',
     },
-    tipContainer: {
-        backgroundColor: '#FFF3E0',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
+
+    // Today's Total
+    todayTotal: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 12,
         borderRadius: 20,
         marginBottom: 16,
+        gap: 8,
     },
-    tipText: {
-        fontSize: 11,
-        color: '#E65100',
-        fontWeight: '500',
+    todayLabel: {
+        fontSize: 14,
     },
+    todayValue: {
+        fontSize: 18,
+        fontWeight: '700',
+    },
+
+    // Controls
     controls: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 20,
-        marginBottom: 20,
+        marginBottom: 30,
     },
     controlButton: {
         width: 80,
@@ -614,7 +736,7 @@ const styles = StyleSheet.create({
         borderRadius: 40,
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#2D4A22',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.3,
         shadowRadius: 12,
@@ -629,12 +751,11 @@ const styles = StyleSheet.create({
     finishButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#4A7C23',
         paddingHorizontal: 24,
         paddingVertical: 16,
         borderRadius: 30,
         gap: 8,
-        shadowColor: '#2D4A22',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
         shadowRadius: 8,
@@ -645,23 +766,15 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '700',
     },
-    progressInfo: {
-        marginBottom: 30,
-    },
-    progressText: {
-        fontSize: 14,
-        color: '#6B8E6B',
-        fontWeight: '500',
-    },
+
+    // Modals
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.7)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 24,
     },
     modalContent: {
-        backgroundColor: '#FFF',
         borderRadius: 24,
         padding: 32,
         alignItems: 'center',
@@ -675,12 +788,10 @@ const styles = StyleSheet.create({
     modalTitle: {
         fontSize: 24,
         fontWeight: '800',
-        color: '#2D4A22',
         marginBottom: 12,
     },
     modalMessage: {
         fontSize: 14,
-        color: '#6B8E6B',
         textAlign: 'center',
         lineHeight: 20,
         marginBottom: 20,
@@ -692,19 +803,19 @@ const styles = StyleSheet.create({
     },
     modalStat: {
         alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 12,
     },
     modalStatValue: {
-        fontSize: 28,
+        fontSize: 24,
         fontWeight: '800',
-        color: '#E65100',
     },
     modalStatLabel: {
         fontSize: 12,
-        color: '#6B8E6B',
         marginTop: 4,
     },
     modalButton: {
-        backgroundColor: '#4A7C23',
         paddingHorizontal: 32,
         paddingVertical: 16,
         borderRadius: 25,
@@ -723,13 +834,11 @@ const styles = StyleSheet.create({
     penaltyTitle: {
         fontSize: 24,
         fontWeight: '800',
-        color: '#D32F2F',
         marginTop: 16,
         marginBottom: 12,
     },
     penaltyMessage: {
         fontSize: 14,
-        color: '#666',
         textAlign: 'center',
         lineHeight: 20,
         marginBottom: 24,
@@ -746,5 +855,24 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '700',
         textAlign: 'center',
+    },
+    henEarnedModal: {
+        borderWidth: 3,
+        borderColor: '#4A7C23',
+    },
+    henEarnedEmoji: {
+        fontSize: 80,
+        marginBottom: 16,
+    },
+    henEarnedTitle: {
+        fontSize: 28,
+        fontWeight: '800',
+        marginBottom: 12,
+    },
+    henEarnedMessage: {
+        fontSize: 16,
+        textAlign: 'center',
+        lineHeight: 24,
+        marginBottom: 24,
     },
 });
