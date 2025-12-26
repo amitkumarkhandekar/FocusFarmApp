@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, PanResponder, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, PanResponder, TouchableOpacity, Dimensions, Platform, ScrollView, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
 import { GLView } from 'expo-gl';
 import { Renderer } from 'expo-three';
 import * as THREE from 'three';
@@ -1162,10 +1163,303 @@ function createWaterTrough(): THREE.Group {
     const waterMaterial = new THREE.MeshStandardMaterial({ color: 0x4a90e2, roughness: 0.3, metalness: 0.2 });
     const water = new THREE.Mesh(waterGeometry, waterMaterial);
     water.position.y = 0.75;
-    trough.add(water);
-
     return trough;
 }
+
+// ============================================
+// 2D FARM VIEW - For Android Compatibility
+// ============================================
+function Farm2DView({
+    isNight,
+    setIsNight,
+    showConvertReminder,
+    setShowConvertReminder,
+    state,
+    getTotalAnimals,
+    colors,
+    isDark,
+    greeting,
+    todayHours,
+    router
+}: {
+    isNight: boolean;
+    setIsNight: (value: boolean) => void;
+    showConvertReminder: boolean;
+    setShowConvertReminder: (value: boolean) => void;
+    state: any;
+    getTotalAnimals: () => number;
+    colors: any;
+    isDark: boolean;
+    greeting: string;
+    todayHours: number;
+    router: any;
+}) {
+    // Animation values for animals
+    const bounceAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        const animation = Animated.loop(
+            Animated.sequence([
+                Animated.timing(bounceAnim, {
+                    toValue: 1,
+                    duration: 1500,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(bounceAnim, {
+                    toValue: 0,
+                    duration: 1500,
+                    useNativeDriver: true,
+                }),
+            ])
+        );
+        animation.start();
+        return () => animation.stop();
+    }, []);
+
+    const bounceY = bounceAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, -8],
+    });
+
+    const renderAnimals = (emoji: string, count: number, label: string) => {
+        if (count === 0) return null;
+        const displayCount = Math.min(count, 12); // Max 12 visible
+        const animals = Array(displayCount).fill(emoji);
+
+        return (
+            <View style={styles2d.animalSection}>
+                <Text style={[styles2d.animalLabel, { color: colors.textSecondary }]}>{label} ({count})</Text>
+                <View style={styles2d.animalGrid}>
+                    {animals.map((animal, index) => (
+                        <Animated.View
+                            key={`${label}-${index}`}
+                            style={[
+                                styles2d.animalItem,
+                                { transform: [{ translateY: bounceY }] }
+                            ]}
+                        >
+                            <Text style={styles2d.animalEmoji}>{animal}</Text>
+                        </Animated.View>
+                    ))}
+                    {count > 12 && (
+                        <View style={styles2d.moreCount}>
+                            <Text style={styles2d.moreCountText}>+{count - 12}</Text>
+                        </View>
+                    )}
+                </View>
+            </View>
+        );
+    };
+
+    return (
+        <View style={[styles2d.container, { backgroundColor: isNight ? '#1a1a2e' : '#87CEEB' }]}>
+            {/* Sky gradient effect */}
+            <View style={[styles2d.sky, { backgroundColor: isNight ? '#0f0f23' : '#87CEEB' }]}>
+                {isNight && (
+                    <View style={styles2d.starsContainer}>
+                        {Array(20).fill(0).map((_, i) => (
+                            <View
+                                key={i}
+                                style={[
+                                    styles2d.star,
+                                    {
+                                        left: `${(i * 17) % 100}%`,
+                                        top: `${(i * 23) % 60}%`,
+                                        opacity: 0.5 + Math.random() * 0.5
+                                    }
+                                ]}
+                            />
+                        ))}
+                    </View>
+                )}
+                {!isNight && <Text style={styles2d.sunEmoji}>☀️</Text>}
+                {isNight && <Text style={styles2d.moonEmoji}>🌙</Text>}
+            </View>
+
+            {/* Farm Scene */}
+            <View style={[styles2d.farmScene, { backgroundColor: isNight ? '#2d4a2a' : '#4a7c23' }]}>
+                {/* Barn */}
+                <View style={styles2d.barnContainer}>
+                    <Text style={styles2d.barnEmoji}>🏠</Text>
+                    <Text style={styles2d.barnLabel}>Your Farm</Text>
+                </View>
+
+                {/* Animals Area */}
+                <ScrollView
+                    style={styles2d.animalsContainer}
+                    contentContainerStyle={styles2d.animalsContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {renderAnimals('🐔', state.hens, 'Hens')}
+                    {renderAnimals('🐐', state.goats, 'Goats')}
+                    {renderAnimals('🐄', state.cows, 'Cows')}
+
+                    {getTotalAnimals() === 0 && (
+                        <View style={styles2d.emptyFarm}>
+                            <Text style={styles2d.emptyEmoji}>🌾</Text>
+                            <Text style={[styles2d.emptyText, { color: colors.textSecondary }]}>
+                                Your farm is empty!{'\n'}Start a focus session to earn animals.
+                            </Text>
+                        </View>
+                    )}
+                </ScrollView>
+
+                {/* Decorative elements */}
+                <View style={styles2d.decorations}>
+                    <Text style={styles2d.decorEmoji}>🌳</Text>
+                    <Text style={styles2d.decorEmoji}>🌻</Text>
+                    <Text style={styles2d.decorEmoji}>🌳</Text>
+                </View>
+            </View>
+
+            {/* UI Overlay - Same as 3D version */}
+            <SafeAreaView style={styles2d.uiOverlay} pointerEvents="box-none">
+                {/* Header */}
+                <View style={[styles2d.header, { backgroundColor: isDark ? 'rgba(30,30,30,0.95)' : 'rgba(255,255,255,0.95)' }]}>
+                    <View>
+                        <Text style={[styles2d.title, { color: colors.text }]}>🏡 Your Farm</Text>
+                        <Text style={[styles2d.greeting, { color: colors.textSecondary }]}>{greeting}</Text>
+                    </View>
+                    <View style={styles2d.statsRow}>
+                        <View style={[styles2d.statBadge, { backgroundColor: isDark ? colors.surfaceSecondary : '#FFF8E1' }]}>
+                            <Text style={styles2d.statEmoji}>🐾</Text>
+                            <Text style={[styles2d.statText, { color: isDark ? colors.text : '#8B6B00' }]}>{getTotalAnimals()}</Text>
+                        </View>
+                        <View style={[styles2d.statBadge, { backgroundColor: isDark ? colors.surfaceSecondary : '#FFF8E1' }]}>
+                            <Sparkles size={14} color="#FFB800" />
+                            <Text style={[styles2d.statText, { color: isDark ? colors.text : '#8B6B00' }]}>{todayHours}h</Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* Hen Conversion Reminder */}
+                {state.hens >= 10 && showConvertReminder && (
+                    <View style={[styles2d.convertReminder, { backgroundColor: isDark ? colors.surfaceSecondary : '#FFF8E1' }]}>
+                        <TouchableOpacity
+                            style={styles2d.convertReminderContent}
+                            onPress={() => router.push('/(tabs)/goals')}
+                        >
+                            <Text style={styles2d.convertReminderEmoji}>🐔→🐐</Text>
+                            <View style={styles2d.convertReminderText}>
+                                <Text style={[styles2d.convertReminderTitle, { color: isDark ? colors.accent : '#E65100' }]}>Convert your hens!</Text>
+                                <Text style={[styles2d.convertReminderDesc, { color: isDark ? colors.textSecondary : '#8B6B00' }]}>
+                                    You have {state.hens} hens. Tap to convert to goats/cows!
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles2d.convertReminderClose}
+                            onPress={() => setShowConvertReminder(false)}
+                        >
+                            <X size={18} color={isDark ? colors.textSecondary : '#8B6B00'} />
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {/* Day/Night Toggle */}
+                <View style={styles2d.dayNightContainer}>
+                    <TouchableOpacity
+                        style={[styles2d.dayNightBtn, isNight && styles2d.dayNightBtnNight]}
+                        onPress={() => setIsNight(!isNight)}
+                        activeOpacity={0.7}
+                    >
+                        {isNight ? <Moon size={18} color="#FFD700" /> : <Sun size={18} color="#FFFFFF" />}
+                        <Text style={[styles2d.dayNightText, isNight && styles2d.dayNightTextNight]}>
+                            {isNight ? 'Night' : 'Day'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Start Focus Button */}
+                <View style={styles2d.fabContainer}>
+                    <TouchableOpacity
+                        style={[styles2d.fab, { backgroundColor: colors.primary }]}
+                        onPress={() => router.push('/focus-start')}
+                        activeOpacity={0.8}
+                    >
+                        <Play size={28} color="#FFF" fill="#FFF" />
+                        <Text style={styles2d.fabText}>Start Focus</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        </View>
+    );
+}
+
+// 2D Styles
+const styles2d = StyleSheet.create({
+    container: { flex: 1 },
+    sky: { height: '35%', justifyContent: 'center', alignItems: 'center' },
+    starsContainer: { ...StyleSheet.absoluteFillObject },
+    star: { position: 'absolute', width: 4, height: 4, backgroundColor: '#fff', borderRadius: 2 },
+    sunEmoji: { fontSize: 60, position: 'absolute', top: 30, right: 30 },
+    moonEmoji: { fontSize: 50, position: 'absolute', top: 30, right: 30 },
+    farmScene: { flex: 1, borderTopLeftRadius: 30, borderTopRightRadius: 30, marginTop: -30, paddingTop: 20 },
+    barnContainer: { alignItems: 'center', marginBottom: 10 },
+    barnEmoji: { fontSize: 50 },
+    barnLabel: { fontSize: 16, fontWeight: '700', color: '#fff', marginTop: 4 },
+    animalsContainer: { flex: 1, paddingHorizontal: 20 },
+    animalsContent: { paddingBottom: 120 },
+    animalSection: { marginBottom: 20 },
+    animalLabel: { fontSize: 14, fontWeight: '600', marginBottom: 8, color: 'rgba(255,255,255,0.8)' },
+    animalGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    animalItem: {
+        width: 50, height: 50, backgroundColor: 'rgba(255,255,255,0.2)',
+        borderRadius: 12, alignItems: 'center', justifyContent: 'center'
+    },
+    animalEmoji: { fontSize: 28 },
+    moreCount: {
+        width: 50, height: 50, backgroundColor: 'rgba(255,255,255,0.3)',
+        borderRadius: 12, alignItems: 'center', justifyContent: 'center'
+    },
+    moreCountText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+    emptyFarm: { alignItems: 'center', paddingVertical: 40 },
+    emptyEmoji: { fontSize: 60, marginBottom: 16 },
+    emptyText: { fontSize: 16, textAlign: 'center', color: 'rgba(255,255,255,0.7)' },
+    decorations: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 10 },
+    decorEmoji: { fontSize: 30 },
+    uiOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between' },
+    header: {
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+        paddingHorizontal: 20, paddingVertical: 14,
+        marginHorizontal: 16, marginTop: 8, borderRadius: 20,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4,
+    },
+    greeting: { fontSize: 12, fontWeight: '500' },
+    title: { fontSize: 20, fontWeight: '800', marginTop: 2 },
+    statsRow: { flexDirection: 'row', gap: 8 },
+    statBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, gap: 6 },
+    statEmoji: { fontSize: 14 },
+    statText: { fontSize: 14, fontWeight: '700' },
+    dayNightContainer: { position: 'absolute', right: 16, top: 140 },
+    dayNightBtn: {
+        flexDirection: 'row', alignItems: 'center',
+        backgroundColor: '#FF8C00', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, gap: 6,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 4,
+        minWidth: 90, justifyContent: 'center',
+    },
+    dayNightBtnNight: { backgroundColor: '#1a1a3e' },
+    dayNightText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
+    dayNightTextNight: { color: '#FFD700' },
+    fabContainer: { alignSelf: 'center', marginBottom: 100 },
+    fab: {
+        flexDirection: 'row', alignItems: 'center',
+        paddingHorizontal: 28, paddingVertical: 16, borderRadius: 50, gap: 10,
+        shadowColor: '#2D4A22', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 8,
+    },
+    fabText: { color: '#FFF', fontSize: 18, fontWeight: '700' },
+    convertReminder: {
+        flexDirection: 'row', alignItems: 'center',
+        marginHorizontal: 16, marginTop: 8, padding: 14, borderRadius: 16, gap: 12,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4,
+    },
+    convertReminderEmoji: { fontSize: 24 },
+    convertReminderText: { flex: 1 },
+    convertReminderTitle: { fontSize: 14, fontWeight: '700' },
+    convertReminderDesc: { fontSize: 11, marginTop: 2 },
+    convertReminderContent: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 },
+    convertReminderClose: { padding: 6 },
+});
 
 // ============================================
 // MAIN COMPONENT
@@ -1752,15 +2046,65 @@ export default function FarmScreen() {
         cameraControlRef.current.targetDistance = Math.min(120, cameraControlRef.current.targetDistance + 15);
     };
 
+    // Use WebView with three.js for 3D rendering on all platforms
+    // This provides consistent cross-platform 3D with animations
+    const webViewRef = useRef<WebView>(null);
+
+    // Send state to WebView
+    useEffect(() => {
+        if (webViewRef.current) {
+            webViewRef.current.postMessage(JSON.stringify({
+                type: 'updateState',
+                hens: state.hens,
+                goats: state.goats,
+                cows: state.cows
+            }));
+        }
+    }, [state.hens, state.goats, state.cows]);
+
+    useEffect(() => {
+        if (webViewRef.current) {
+            webViewRef.current.postMessage(JSON.stringify({
+                type: 'toggleDayNight',
+                isNight: isNight
+            }));
+        }
+    }, [isNight]);
+
+    const handleZoomInWebView = () => {
+        webViewRef.current?.postMessage(JSON.stringify({ type: 'zoom', delta: -15 }));
+    };
+    const handleZoomOutWebView = () => {
+        webViewRef.current?.postMessage(JSON.stringify({ type: 'zoom', delta: 15 }));
+    };
+
+    const farm3dHtml = require('../../assets/farm3d.html');
+
     return (
         <View style={styles.container}>
-            <View style={styles.canvasContainer} {...panResponder.panHandlers}>
-                <GLView
-                    ref={glRef}
-                    style={{ flex: 1 }}
-                    onContextCreate={onContextCreate}
-                />
-            </View>
+            <WebView
+                ref={webViewRef}
+                source={farm3dHtml}
+                style={{ flex: 1 }}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                originWhitelist={['*']}
+                onLoad={() => {
+                    // Send initial state after load
+                    setTimeout(() => {
+                        webViewRef.current?.postMessage(JSON.stringify({
+                            type: 'updateState',
+                            hens: state.hens,
+                            goats: state.goats,
+                            cows: state.cows
+                        }));
+                        webViewRef.current?.postMessage(JSON.stringify({
+                            type: 'toggleDayNight',
+                            isNight: isNight
+                        }));
+                    }, 500);
+                }}
+            />
 
             <SafeAreaView style={styles.uiOverlay} pointerEvents="box-none">
                 {/* Header with Stats */}
@@ -1819,12 +2163,12 @@ export default function FarmScreen() {
                     </TouchableOpacity>
                 </View>
 
-                {/* Zoom Controls - Separate container */}
+                {/* Zoom Controls */}
                 <View style={styles.zoomContainer}>
-                    <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomIn} activeOpacity={0.7}>
+                    <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomInWebView} activeOpacity={0.7}>
                         <ZoomIn size={20} color="#4A7C23" />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomOut} activeOpacity={0.7}>
+                    <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomOutWebView} activeOpacity={0.7}>
                         <ZoomOut size={20} color="#4A7C23" />
                     </TouchableOpacity>
                 </View>
