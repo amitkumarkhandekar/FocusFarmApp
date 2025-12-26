@@ -43,3 +43,22 @@ create policy "Users can delete own categories"
 
 -- Grant access
 grant all on public.categories to authenticated;
+
+
+CREATE TABLE app_versions (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    version_name VARCHAR(20) NOT NULL UNIQUE,
+    is_deprecated BOOLEAN DEFAULT FALSE,
+    message TEXT DEFAULT 'Please update to the latest version.',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+
+-- Enable RLS on the table
+ALTER TABLE app_versions ENABLE ROW LEVEL SECURITY;
+
+-- Allow ANYONE to read version info (public access)
+CREATE POLICY "Public can read app versions" 
+ON app_versions 
+FOR SELECT 
+USING (true);

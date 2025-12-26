@@ -4,6 +4,7 @@ import {
     Text,
     StyleSheet,
     TouchableOpacity,
+    TouchableWithoutFeedback,
     Animated,
     Alert,
     Dimensions,
@@ -14,8 +15,9 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Pause, Play, X, Leaf, Check, AlertTriangle, Skull } from 'lucide-react-native';
+import { Pause, Play, X, Leaf, Check, AlertTriangle } from 'lucide-react-native';
 import { useFarm } from '../context/FarmContext';
+import { deactivateKeepAwake } from 'expo-keep-awake';
 import * as Brightness from 'expo-brightness';
 import { useTheme } from '../context/ThemeContext';
 
@@ -24,6 +26,8 @@ const CIRCLE_SIZE = SCREEN_WIDTH * 0.55;
 
 // 6 hours in seconds = 21600 seconds
 const SIX_HOURS_SECONDS = 6 * 60 * 60;
+const SCREEN_DIM_TIMEOUT = 30000; // 30 seconds before dimming
+const MIN_BRIGHTNESS = 0.01; // Almost completely dark
 
 const MOTIVATIONAL_QUOTES = [
     "Your chick is growing! Keep going! 🐣",
@@ -45,7 +49,6 @@ const getChickenEmoji = (progress: number): string => {
 
 // Get size multiplier based on progress
 const getChickenSize = (progress: number): number => {
-    // Start at 0.5x, grow to 1.5x at full size
     return 0.5 + (progress * 1);
 };
 
@@ -60,26 +63,24 @@ const getChickenStage = (progress: number): string => {
 };
 
 export default function FocusScreen() {
-    // NOTE: No useKeepAwake() - allows device's natural screen timeout
-
     const router = useRouter();
     const params = useLocalSearchParams<{ taskName?: string; categoryId?: string; categoryName?: string }>();
-    const { addStudyTime, saveSession, applyPenalty, claimDailyReward, state } = useFarm();
+    const { addStudyTime, saveSession, claimDailyReward, state } = useFarm();
     const { colors, isDark } = useTheme();
 
     // Initialize elapsed seconds with today's accumulated minutes
     const initialSeconds = (state.todayMinutes || 0) * 60;
 
     const [isRunning, setIsRunning] = useState(true);
-    const [elapsedSeconds, setElapsedSeconds] = useState(0); // Session time only
-    const [totalSeconds, setTotalSeconds] = useState(initialSeconds); // Today's total including previous
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
+    const [totalSeconds, setTotalSeconds] = useState(initialSeconds);
     const [quote] = useState(MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)]);
     const [showLeaveWarning, setShowLeaveWarning] = useState(false);
-    const [showPenaltyWarning, setShowPenaltyWarning] = useState(false);
     const [showHenEarnedModal, setShowHenEarnedModal] = useState(false);
     const [henJustEarned, setHenJustEarned] = useState(false);
     const [leaveCount, setLeaveCount] = useState(0);
     const [sessionStartTime] = useState(new Date());
+    const [isScreenDimmed, setIsScreenDimmed] = useState(false);
 
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -89,17 +90,18 @@ export default function FocusScreen() {
     const backgroundStartTime = useRef<number | null>(null);
     const lastElapsedRef = useRef(0);
     const originalBrightness = useRef<number>(0.7);
+    const dimTimeout = useRef<NodeJS.Timeout | null>(null);
 
-    // Calculate progress towards 6 hours (use remaining within current 6-hour cycle)
+    // Progress towards 6 hours
     const progressTowardsHen = (totalSeconds % SIX_HOURS_SECONDS) / SIX_HOURS_SECONDS;
     const currentChickenProgress = Math.min(progressTowardsHen, 1);
 
-    // Keep elapsedSeconds in sync with ref for background calculation
+    // Sync elapsedSeconds with ref
     useEffect(() => {
         lastElapsedRef.current = elapsedSeconds;
     }, [elapsedSeconds]);
 
-    // Screen brightness - save original but don't keep awake
+    // Screen brightness management - save original and set up dimming
     useEffect(() => {
         const initBrightness = async () => {
             try {
@@ -112,24 +114,64 @@ export default function FocusScreen() {
             }
         };
         initBrightness();
+        deactivateKeepAwake('focus-session');
 
         return () => {
             // Restore brightness when leaving
+            if (dimTimeout.current) clearTimeout(dimTimeout.current);
             Brightness.setBrightnessAsync(originalBrightness.current).catch(() => { });
         };
     }, []);
 
+    // Auto-dim after 30 seconds of inactivity
+    const resetDimTimer = useCallback(() => {
+        // Clear existing timer
+        if (dimTimeout.current) clearTimeout(dimTimeout.current);
+
+        // Restore brightness if dimmed
+        if (isScreenDimmed) {
+            Brightness.setBrightnessAsync(originalBrightness.current).catch(() => { });
+            setIsScreenDimmed(false);
+        }
+
+        // Set new dim timer (only if running)
+        if (isRunning) {
+            dimTimeout.current = setTimeout(() => {
+                Brightness.setBrightnessAsync(MIN_BRIGHTNESS).catch(() => { });
+                setIsScreenDimmed(true);
+            }, SCREEN_DIM_TIMEOUT);
+        }
+    }, [isRunning, isScreenDimmed]);
+
+    // Start dim timer on mount and when running changes
+    useEffect(() => {
+        if (isRunning) {
+            resetDimTimer();
+        } else {
+            // Restore brightness when paused
+            if (dimTimeout.current) clearTimeout(dimTimeout.current);
+            Brightness.setBrightnessAsync(originalBrightness.current).catch(() => { });
+            setIsScreenDimmed(false);
+        }
+        return () => {
+            if (dimTimeout.current) clearTimeout(dimTimeout.current);
+        };
+    }, [isRunning]);
+
+    // Handle screen touch - restore brightness
+    const handleScreenTouch = () => {
+        resetDimTimer();
+    };
+
     // Check if hen was earned
     useEffect(() => {
-        const previousHens = Math.floor((totalSeconds - elapsedSeconds) / SIX_HOURS_SECONDS);
+        const previousHens = Math.floor((totalSeconds - 1) / SIX_HOURS_SECONDS);
         const currentHens = Math.floor(totalSeconds / SIX_HOURS_SECONDS);
 
-        if (currentHens > previousHens && !henJustEarned) {
-            // User just crossed 6 hours threshold!
+        if (currentHens > previousHens && totalSeconds > 0 && !henJustEarned) {
             setHenJustEarned(true);
             setShowHenEarnedModal(true);
 
-            // Celebration animation
             Animated.sequence([
                 Animated.spring(chickenScaleAnim, { toValue: 1.5, useNativeDriver: true }),
                 Animated.spring(chickenScaleAnim, { toValue: 1, useNativeDriver: true }),
@@ -139,7 +181,7 @@ export default function FocusScreen() {
         }
     }, [totalSeconds]);
 
-    // App State Detection - Timer CONTINUES even in background
+    // App State Detection - Timer CONTINUES in background
     useEffect(() => {
         const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
             // Going to background/inactive
@@ -163,10 +205,6 @@ export default function FocusScreen() {
                     if (timeAwaySec > 5) {
                         setShowLeaveWarning(true);
 
-                        if (leaveCount >= 3 && state.hens > 0) {
-                            setShowPenaltyWarning(true);
-                        }
-
                         Animated.sequence([
                             Animated.timing(shakeAnim, { toValue: 15, duration: 50, useNativeDriver: true }),
                             Animated.timing(shakeAnim, { toValue: -15, duration: 50, useNativeDriver: true }),
@@ -184,7 +222,7 @@ export default function FocusScreen() {
         });
 
         return () => subscription.remove();
-    }, [isRunning, state.hens, leaveCount]);
+    }, [isRunning, leaveCount]);
 
     // Animations
     useEffect(() => {
@@ -268,7 +306,7 @@ export default function FocusScreen() {
         }
 
         const leaveMessage = leaveCount > 0
-            ? `\n\n⚠️ You left the app ${leaveCount} time(s).`
+            ? `\n\n📱 You checked your phone ${leaveCount} time(s).`
             : '\n\n✨ Perfect focus session!';
 
         const henMessage = henJustEarned ? '\n\n🐔 You earned a new hen!' : '';
@@ -289,7 +327,6 @@ export default function FocusScreen() {
                             categoryId: params.categoryId,
                         });
 
-                        // Check if daily goal reached and claim reward
                         const newTotalMinutes = state.todayMinutes + minutes;
                         if (newTotalMinutes >= state.dailyGoalTarget * 60 && !state.dailyGoalClaimed) {
                             claimDailyReward();
@@ -313,14 +350,13 @@ export default function FocusScreen() {
             categoryId: params.categoryId,
         });
 
-        // Check if daily goal reached
         const newTotalMinutes = state.todayMinutes + minutes;
         if (newTotalMinutes >= state.dailyGoalTarget * 60 && !state.dailyGoalClaimed) {
             claimDailyReward();
         }
 
         const leaveMessage = leaveCount > 0
-            ? `\n\n⚠️ You left ${leaveCount} time(s).`
+            ? `\n\n📱 You checked your phone ${leaveCount} time(s).`
             : '';
 
         const henMessage = henJustEarned ? '\n\n🐔 You earned a new hen!' : '';
@@ -337,16 +373,6 @@ export default function FocusScreen() {
         setIsRunning(true);
     };
 
-    const handlePenaltyConfirm = () => {
-        applyPenalty(1);
-        setShowPenaltyWarning(false);
-        Alert.alert(
-            "Penalty Applied 😔",
-            "You lost 1 hen for leaving the app too many times. Stay focused!",
-            [{ text: "I'll try harder!" }]
-        );
-    };
-
     const handleHenEarnedContinue = () => {
         setShowHenEarnedModal(false);
     };
@@ -356,184 +382,169 @@ export default function FocusScreen() {
     const chickenStage = getChickenStage(currentChickenProgress);
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateX: shakeAnim }] }]}>
-                {/* Header */}
-                <View style={styles.header}>
-                    <TouchableOpacity style={[styles.closeButton, { backgroundColor: colors.surface }]} onPress={handleStop}>
-                        <X size={24} color={colors.textSecondary} />
-                    </TouchableOpacity>
-                    <Text style={[styles.headerTitle, { color: colors.text }]}>Focus Session</Text>
-                    <View style={{ width: 44 }} />
-                </View>
-
-                {/* Task Name Display */}
-                {params.taskName && (
-                    <View style={[styles.taskBadge, { backgroundColor: colors.primaryLight }]}>
-                        <Text style={[styles.taskText, { color: colors.primary }]}>📝 {params.taskName}</Text>
-                        {params.categoryName && (
-                            <Text style={[styles.categoryText, { color: colors.textSecondary }]}> • {params.categoryName}</Text>
-                        )}
+        <TouchableWithoutFeedback onPress={handleScreenTouch}>
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+                <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateX: shakeAnim }] }]}>
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <TouchableOpacity style={[styles.closeButton, { backgroundColor: colors.surface }]} onPress={handleStop}>
+                            <X size={24} color={colors.textSecondary} />
+                        </TouchableOpacity>
+                        <Text style={[styles.headerTitle, { color: colors.text }]}>Focus Session</Text>
+                        <View style={{ width: 44 }} />
                     </View>
-                )}
 
-                {/* Leave Counter Warning */}
-                {leaveCount > 0 && (
-                    <View style={[styles.leaveWarning, leaveCount >= 3 && styles.leaveWarningDanger]}>
-                        <AlertTriangle size={16} color={leaveCount >= 3 ? "#D32F2F" : "#FF6B00"} />
-                        <Text style={[styles.leaveWarningText, leaveCount >= 3 && styles.leaveWarningTextDanger]}>
-                            Left app {leaveCount}x {leaveCount >= 3 ? '- Penalty applied!' : '- Stay focused!'}
-                        </Text>
-                    </View>
-                )}
-
-                {/* Motivational Quote */}
-                <View style={[styles.quoteContainer, { backgroundColor: colors.surface }]}>
-                    <Leaf size={20} color={colors.textSecondary} />
-                    <Text style={[styles.quote, { color: colors.textSecondary }]}>{quote}</Text>
-                </View>
-
-                {/* Growing Chicken Display */}
-                <View style={styles.chickenContainer}>
-                    <View style={[styles.chickenCircle, { backgroundColor: colors.surface }]}>
-                        <Animated.Text style={[
-                            styles.chickenEmoji,
-                            {
-                                fontSize: 60 * chickenSize,
-                                transform: [{ scale: chickenScaleAnim }]
-                            }
-                        ]}>
-                            {chickenEmoji}
-                        </Animated.Text>
-                        <Text style={[styles.chickenStage, { color: colors.primary }]}>{chickenStage}</Text>
-
-                        {/* Progress bar */}
-                        <View style={[styles.progressBarContainer, { backgroundColor: colors.border }]}>
-                            <View
-                                style={[
-                                    styles.progressBarFill,
-                                    {
-                                        width: `${currentChickenProgress * 100}%`,
-                                        backgroundColor: currentChickenProgress >= 1 ? colors.accent : colors.primary
-                                    }
-                                ]}
-                            />
+                    {/* Task Name Display */}
+                    {params.taskName && (
+                        <View style={[styles.taskBadge, { backgroundColor: colors.primaryLight }]}>
+                            <Text style={[styles.taskText, { color: colors.primary }]}>📝 {params.taskName}</Text>
+                            {params.categoryName && (
+                                <Text style={[styles.categoryText, { color: colors.textSecondary }]}> • {params.categoryName}</Text>
+                            )}
                         </View>
-                        <Text style={[styles.timeRemaining, { color: colors.textMuted }]}>
-                            {currentChickenProgress >= 1 ? '🎉 Hen earned!' : formatTimeRemaining()}
-                        </Text>
-                    </View>
-                </View>
+                    )}
 
-                {/* Timer Circle */}
-                <View style={styles.timerContainer}>
-                    <Animated.View
-                        style={[
-                            styles.timerCircle,
-                            { transform: [{ scale: pulseAnim }], backgroundColor: isDark ? colors.surface : '#FFF' },
-                            !isRunning && styles.timerCirclePaused
-                        ]}
-                    >
-                        <View style={styles.timerInner}>
-                            <Text style={[styles.timeLabel, { color: colors.textSecondary }]}>This Session</Text>
-                            <Text style={[styles.timeText, { color: colors.text }]}>{formatTime(elapsedSeconds)}</Text>
-                            <Text style={[styles.statusText, { color: colors.primary }, !isRunning && styles.statusTextPaused]}>
-                                {isRunning ? 'Focusing...' : 'Paused'}
+                    {/* Leave Counter (informational only, no penalty) */}
+                    {leaveCount > 0 && (
+                        <View style={[styles.leaveWarning, { backgroundColor: isDark ? '#2A2522' : '#FFF3E0' }]}>
+                            <AlertTriangle size={16} color="#FF6B00" />
+                            <Text style={[styles.leaveWarningText, { color: '#E65100' }]}>
+                                📱 Checked phone {leaveCount}x - Stay focused!
                             </Text>
                         </View>
-                    </Animated.View>
-                </View>
-
-                {/* Today's Total */}
-                <View style={[styles.todayTotal, { backgroundColor: colors.surface }]}>
-                    <Text style={[styles.todayLabel, { color: colors.textSecondary }]}>Today's Total:</Text>
-                    <Text style={[styles.todayValue, { color: colors.primary }]}>{formatTime(totalSeconds)}</Text>
-                </View>
-
-                {/* Controls */}
-                <View style={styles.controls}>
-                    <TouchableOpacity
-                        style={[styles.controlButton, isRunning ? styles.pauseButton : styles.playButton, { backgroundColor: isRunning ? '#FF6B00' : colors.primary }]}
-                        onPress={handlePause}
-                    >
-                        {isRunning ? (
-                            <Pause size={32} color="#FFF" />
-                        ) : (
-                            <Play size={32} color="#FFF" fill="#FFF" />
-                        )}
-                    </TouchableOpacity>
-
-                    {elapsedSeconds >= 60 && (
-                        <TouchableOpacity
-                            style={[styles.finishButton, { backgroundColor: colors.primary }]}
-                            onPress={handleFinish}
-                        >
-                            <Check size={24} color="#FFF" />
-                            <Text style={styles.finishText}>Finish</Text>
-                        </TouchableOpacity>
                     )}
-                </View>
-            </Animated.View>
 
-            {/* Leave Warning Modal */}
-            <Modal visible={showLeaveWarning} transparent animationType="fade">
-                <View style={[styles.modalOverlay, { backgroundColor: colors.modalOverlay }]}>
-                    <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-                        <Text style={styles.modalEmoji}>😔</Text>
-                        <Text style={[styles.modalTitle, { color: colors.text }]}>You left the app!</Text>
-                        <Text style={[styles.modalMessage, { color: colors.textSecondary }]}>
-                            Your timer continued in the background. Each time you leave counts as a distraction.
-                            {leaveCount >= 3 && '\n\n🐔 You lost 1 hen as a penalty!'}
-                        </Text>
-                        <View style={styles.modalStats}>
-                            <View style={[styles.modalStat, { backgroundColor: colors.primaryLight }]}>
-                                <Text style={[styles.modalStatValue, { color: colors.text }]}>{leaveCount}</Text>
-                                <Text style={[styles.modalStatLabel, { color: colors.textSecondary }]}>Times Left</Text>
+                    {/* Motivational Quote */}
+                    <View style={[styles.quoteContainer, { backgroundColor: colors.surface }]}>
+                        <Leaf size={20} color={colors.textSecondary} />
+                        <Text style={[styles.quote, { color: colors.textSecondary }]}>{quote}</Text>
+                    </View>
+
+                    {/* Growing Chicken Display */}
+                    <View style={styles.chickenContainer}>
+                        <View style={[styles.chickenCircle, { backgroundColor: colors.surface }]}>
+                            <Animated.Text style={[
+                                styles.chickenEmoji,
+                                {
+                                    fontSize: 60 * chickenSize,
+                                    transform: [{ scale: chickenScaleAnim }]
+                                }
+                            ]}>
+                                {chickenEmoji}
+                            </Animated.Text>
+                            <Text style={[styles.chickenStage, { color: colors.primary }]}>{chickenStage}</Text>
+
+                            {/* Progress bar */}
+                            <View style={[styles.progressBarContainer, { backgroundColor: colors.border }]}>
+                                <View
+                                    style={[
+                                        styles.progressBarFill,
+                                        {
+                                            width: `${currentChickenProgress * 100}%`,
+                                            backgroundColor: currentChickenProgress >= 1 ? colors.accent : colors.primary
+                                        }
+                                    ]}
+                                />
                             </View>
-                            <View style={[styles.modalStat, { backgroundColor: colors.primaryLight }]}>
-                                <Text style={[styles.modalStatValue, { color: colors.text }]}>{formatTime(elapsedSeconds)}</Text>
-                                <Text style={[styles.modalStatLabel, { color: colors.textSecondary }]}>Session Time</Text>
-                            </View>
+                            <Text style={[styles.timeRemaining, { color: colors.textMuted }]}>
+                                {currentChickenProgress >= 1 ? '🎉 Hen earned!' : formatTimeRemaining()}
+                            </Text>
                         </View>
-                        <TouchableOpacity style={[styles.modalButton, { backgroundColor: colors.primary }]} onPress={handleContinueFocus}>
-                            <Text style={styles.modalButtonText}>Continue Focusing</Text>
-                        </TouchableOpacity>
                     </View>
-                </View>
-            </Modal>
 
-            {/* Penalty Warning Modal */}
-            <Modal visible={showPenaltyWarning} transparent animationType="fade">
-                <View style={[styles.modalOverlay, { backgroundColor: colors.modalOverlay }]}>
-                    <View style={[styles.modalContent, styles.penaltyModal, { backgroundColor: colors.surface }]}>
-                        <Skull size={48} color="#D32F2F" />
-                        <Text style={[styles.penaltyTitle, { color: colors.error }]}>Penalty Warning!</Text>
-                        <Text style={[styles.penaltyMessage, { color: colors.textSecondary }]}>
-                            You've left the app {leaveCount} times. As a consequence, you will lose 1 hen from your farm.
-                        </Text>
-                        <TouchableOpacity style={styles.penaltyButton} onPress={handlePenaltyConfirm}>
-                            <Text style={styles.penaltyButtonText}>I understand</Text>
-                        </TouchableOpacity>
+                    {/* Timer Circle */}
+                    <View style={styles.timerContainer}>
+                        <Animated.View
+                            style={[
+                                styles.timerCircle,
+                                { transform: [{ scale: pulseAnim }], backgroundColor: isDark ? colors.surface : '#FFF' },
+                                !isRunning && styles.timerCirclePaused
+                            ]}
+                        >
+                            <View style={styles.timerInner}>
+                                <Text style={[styles.timeLabel, { color: colors.textSecondary }]}>This Session</Text>
+                                <Text style={[styles.timeText, { color: colors.text }]}>{formatTime(elapsedSeconds)}</Text>
+                                <Text style={[styles.statusText, { color: colors.primary }, !isRunning && styles.statusTextPaused]}>
+                                    {isRunning ? 'Focusing...' : 'Paused'}
+                                </Text>
+                            </View>
+                        </Animated.View>
                     </View>
-                </View>
-            </Modal>
 
-            {/* Hen Earned Modal */}
-            <Modal visible={showHenEarnedModal} transparent animationType="fade">
-                <View style={[styles.modalOverlay, { backgroundColor: colors.modalOverlay }]}>
-                    <View style={[styles.modalContent, styles.henEarnedModal, { backgroundColor: colors.surface }]}>
-                        <Text style={styles.henEarnedEmoji}>🐔</Text>
-                        <Text style={[styles.henEarnedTitle, { color: colors.primary }]}>Congratulations!</Text>
-                        <Text style={[styles.henEarnedMessage, { color: colors.textSecondary }]}>
-                            You've studied for 6 hours! A new hen has been added to your farm! 🎉
-                        </Text>
-                        <TouchableOpacity style={[styles.modalButton, { backgroundColor: colors.primary }]} onPress={handleHenEarnedContinue}>
-                            <Text style={styles.modalButtonText}>Keep Going!</Text>
-                        </TouchableOpacity>
+                    {/* Today's Total */}
+                    <View style={[styles.todayTotal, { backgroundColor: colors.surface }]}>
+                        <Text style={[styles.todayLabel, { color: colors.textSecondary }]}>Today's Total:</Text>
+                        <Text style={[styles.todayValue, { color: colors.primary }]}>{formatTime(totalSeconds)}</Text>
                     </View>
-                </View>
-            </Modal>
-        </SafeAreaView>
+
+                    {/* Controls */}
+                    <View style={styles.controls}>
+                        <TouchableOpacity
+                            style={[styles.controlButton, isRunning ? styles.pauseButton : styles.playButton, { backgroundColor: isRunning ? '#FF6B00' : colors.primary }]}
+                            onPress={handlePause}
+                        >
+                            {isRunning ? (
+                                <Pause size={32} color="#FFF" />
+                            ) : (
+                                <Play size={32} color="#FFF" fill="#FFF" />
+                            )}
+                        </TouchableOpacity>
+
+                        {elapsedSeconds >= 60 && (
+                            <TouchableOpacity
+                                style={[styles.finishButton, { backgroundColor: colors.primary }]}
+                                onPress={handleFinish}
+                            >
+                                <Check size={24} color="#FFF" />
+                                <Text style={styles.finishText}>Finish</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </Animated.View>
+
+                {/* Leave Warning Modal (No penalty, just informational) */}
+                <Modal visible={showLeaveWarning} transparent animationType="fade">
+                    <View style={[styles.modalOverlay, { backgroundColor: colors.modalOverlay }]}>
+                        <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+                            <Text style={styles.modalEmoji}>📱</Text>
+                            <Text style={[styles.modalTitle, { color: colors.text }]}>Welcome Back!</Text>
+                            <Text style={[styles.modalMessage, { color: colors.textSecondary }]}>
+                                Your timer continued while you were away. Try to stay focused for better results!
+                            </Text>
+                            <View style={styles.modalStats}>
+                                <View style={[styles.modalStat, { backgroundColor: colors.primaryLight }]}>
+                                    <Text style={[styles.modalStatValue, { color: colors.text }]}>{leaveCount}</Text>
+                                    <Text style={[styles.modalStatLabel, { color: colors.textSecondary }]}>Times Away</Text>
+                                </View>
+                                <View style={[styles.modalStat, { backgroundColor: colors.primaryLight }]}>
+                                    <Text style={[styles.modalStatValue, { color: colors.text }]}>{formatTime(elapsedSeconds)}</Text>
+                                    <Text style={[styles.modalStatLabel, { color: colors.textSecondary }]}>Session Time</Text>
+                                </View>
+                            </View>
+                            <TouchableOpacity style={[styles.modalButton, { backgroundColor: colors.primary }]} onPress={handleContinueFocus}>
+                                <Text style={styles.modalButtonText}>Continue Focusing</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Hen Earned Modal */}
+                <Modal visible={showHenEarnedModal} transparent animationType="fade">
+                    <View style={[styles.modalOverlay, { backgroundColor: colors.modalOverlay }]}>
+                        <View style={[styles.modalContent, styles.henEarnedModal, { backgroundColor: colors.surface }]}>
+                            <Text style={styles.henEarnedEmoji}>🐔</Text>
+                            <Text style={[styles.henEarnedTitle, { color: colors.primary }]}>Congratulations!</Text>
+                            <Text style={[styles.henEarnedMessage, { color: colors.textSecondary }]}>
+                                You've studied for 6 hours! A new hen has been added to your farm! 🎉
+                            </Text>
+                            <TouchableOpacity style={[styles.modalButton, { backgroundColor: colors.primary }]} onPress={handleHenEarnedContinue}>
+                                <Text style={styles.modalButtonText}>Keep Going!</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
+            </SafeAreaView>
+        </TouchableWithoutFeedback>
     );
 }
 
@@ -582,23 +593,15 @@ const styles = StyleSheet.create({
     leaveWarning: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFF3E0',
         paddingHorizontal: 16,
         paddingVertical: 10,
         borderRadius: 20,
         marginTop: 12,
         gap: 8,
     },
-    leaveWarningDanger: {
-        backgroundColor: '#FFEBEE',
-    },
     leaveWarningText: {
         fontSize: 13,
-        color: '#E65100',
         fontWeight: '600',
-    },
-    leaveWarningTextDanger: {
-        color: '#D32F2F',
     },
     quoteContainer: {
         flexDirection: 'row',
@@ -822,35 +825,6 @@ const styles = StyleSheet.create({
         width: '100%',
     },
     modalButtonText: {
-        color: '#FFF',
-        fontSize: 16,
-        fontWeight: '700',
-        textAlign: 'center',
-    },
-    penaltyModal: {
-        borderWidth: 3,
-        borderColor: '#D32F2F',
-    },
-    penaltyTitle: {
-        fontSize: 24,
-        fontWeight: '800',
-        marginTop: 16,
-        marginBottom: 12,
-    },
-    penaltyMessage: {
-        fontSize: 14,
-        textAlign: 'center',
-        lineHeight: 20,
-        marginBottom: 24,
-    },
-    penaltyButton: {
-        backgroundColor: '#D32F2F',
-        paddingHorizontal: 32,
-        paddingVertical: 16,
-        borderRadius: 25,
-        width: '100%',
-    },
-    penaltyButtonText: {
         color: '#FFF',
         fontSize: 16,
         fontWeight: '700',
