@@ -122,8 +122,8 @@ const styles = StyleSheet.create({
         marginTop: 4,
     },
     content: {
-        paddingHorizontal: 24,
-        paddingBottom: 120,
+        padding: 24,
+        paddingBottom: 150,
     },
     sectionTitle: {
         fontSize: 16,

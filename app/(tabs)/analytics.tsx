@@ -623,7 +623,7 @@ const styles = StyleSheet.create({
     },
     content: {
         paddingHorizontal: 20,
-        paddingBottom: 120,
+        paddingBottom: 150,
     },
 
     // TimeFrame Selector

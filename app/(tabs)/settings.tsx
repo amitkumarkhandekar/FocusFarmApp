@@ -470,7 +470,10 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 },
     title: { fontSize: 24, fontWeight: '800' },
-    content: { paddingHorizontal: 24, paddingBottom: 100 },
+    content: {
+        padding: 20,
+        paddingBottom: 150,
+    },
     sectionTitle: { fontSize: 16, fontWeight: '700', marginTop: 24, marginBottom: 12 },
     profileCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 16, gap: 14 },
     profileAvatar: { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },

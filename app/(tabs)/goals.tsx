@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
     },
     content: {
         paddingHorizontal: 24,
-        paddingBottom: 120,
+        paddingBottom: 150,
     },
     summaryCard: {
         backgroundColor: '#E8F5E9',

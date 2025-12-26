@@ -9,26 +9,24 @@ export default function TabsLayout() {
     const { colors, isDark } = useTheme();
     const insets = useSafeAreaInsets();
 
-    // Calculate tab bar height based on safe area
-    // Base height + safe area bottom inset for Android nav buttons
-    const tabBarHeight = 60 + Math.max(insets.bottom, Platform.OS === 'android' ? 10 : 0);
-    const tabBarPaddingBottom = Math.max(insets.bottom, Platform.OS === 'android' ? 10 : 0);
+    // Optimized tab bar height for better content visibility
+    const tabBarHeight = 65 + Math.max(insets.bottom, Platform.OS === 'android' ? 10 : 0);
+    const tabBarPaddingBottom = Math.max(insets.bottom, Platform.OS === 'android' ? 12 : 6);
 
     return (
         <Tabs
             screenOptions={{
                 headerShown: false,
                 tabBarStyle: {
-                    backgroundColor: colors.tabBar,
+                    backgroundColor: colors.background,
                     borderTopWidth: 0,
-                    elevation: 10,
-                    shadowColor: isDark ? '#000' : '#2D4A22',
-                    shadowOffset: { width: 0, height: -4 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 12,
                     height: tabBarHeight,
                     paddingBottom: tabBarPaddingBottom,
-                    paddingTop: 8,
+                    paddingTop: 4,
+                    // Completely flat design to prevent content occlusion
+                    elevation: 0,
+                    shadowOpacity: 0,
+                    borderWidth: 0,
                 },
                 tabBarActiveTintColor: colors.primary,
                 tabBarInactiveTintColor: colors.textMuted,
@@ -38,7 +36,7 @@ export default function TabsLayout() {
                     marginTop: 2,
                 },
                 tabBarIconStyle: {
-                    marginTop: 4,
+                    marginTop: 0,
                 },
             }}
         >

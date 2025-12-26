@@ -1,65 +1,88 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Dimensions, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Cloud, ArrowRight } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { useEffect } from 'react';
+import { useFarm } from '../context/FarmContext';
+import { Redirect } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 
 export default function LandingScreen() {
     const router = useRouter();
+    const { state } = useFarm();
 
-    useEffect(() => {
-        const checkUser = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) {
-                router.replace('/(tabs)/farm');
-            }
-        };
-        checkUser();
-    }, []);
+    // If session is already loaded and user is logged in, redirect immediately
+    // state.isLoading is true until supabase.auth.getUser() completes in FarmContext
+    if (!state.isLoading && state.userName !== 'Focus Farmer') {
+        return <Redirect href="/(tabs)/farm" />;
+    }
+
+    // While loading auth state, show a clean background or custom splash
+    if (state.isLoading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <Image
+                    source={require('../assets/Logo.png')}
+                    style={{ width: 100, height: 100, marginBottom: 16 }}
+                    resizeMode="contain"
+                />
+                <Text style={[styles.logoText, { fontSize: 32, marginLeft: 0 }]}>FocusFarm</Text>
+            </View>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.heroSection}>
-                <View style={styles.logoContainer}>
-                    <Cloud size={40} color="#6B8E23" />
-                    <Text style={styles.logoText}>FocusFarm</Text>
-                </View>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+            >
+                <View style={styles.heroSection}>
+                    <View style={styles.logoContainer}>
+                        <Image
+                            source={require('../assets/Logo.png')}
+                            style={{ width: 48, height: 48 }}
+                            resizeMode="contain"
+                        />
+                        <Text style={styles.logoText}>FocusFarm</Text>
+                    </View>
 
-                <View style={styles.visualContainer}>
-                    {/* Placeholder for Animal Illustration */}
-                    <View style={styles.illustration}>
-                        <Text style={styles.emoji}>🐄</Text>
+                    <View style={styles.visualContainer}>
+                        <Image
+                            source={require('../assets/Logo.png')}
+                            style={styles.heroLogo}
+                            resizeMode="contain"
+                        />
+                    </View>
+
+                    <View style={styles.textContainer}>
+                        <Text style={styles.title}>Grow your farm by growing your focus.</Text>
+                        <Text style={styles.subtitle}>
+                            Transform study sessions into a playful journey. Collect animals, unlock rewards, and build your dream farm.
+                        </Text>
                     </View>
                 </View>
 
-                <View style={styles.textContainer}>
-                    <Text style={styles.title}>Grow your farm by growing your focus.</Text>
-                    <Text style={styles.subtitle}>
-                        Transform study sessions into a playful journey. Collect animals, unlock rewards, and build your dream farm.
-                    </Text>
+                <View style={styles.buttonContainer}>
+                    <TouchableOpacity
+                        style={styles.primaryButton}
+                        onPress={() => router.push('/signup')}
+                    >
+                        <Text style={styles.primaryButtonText}>Get Started</Text>
+                        <ArrowRight size={20} color="#FFF" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.secondaryButton}
+                        onPress={() => router.push('/login')}
+                    >
+                        <Text style={styles.secondaryButtonText}>Already have a farm? Log in</Text>
+                    </TouchableOpacity>
                 </View>
-            </View>
-
-            <View style={styles.buttonContainer}>
-                <TouchableOpacity
-                    style={styles.primaryButton}
-                    onPress={() => router.push('/signup')}
-                >
-                    <Text style={styles.primaryButtonText}>Get Started</Text>
-                    <ArrowRight size={20} color="#FFF" />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={styles.secondaryButton}
-                    onPress={() => router.push('/login')}
-                >
-                    <Text style={styles.secondaryButtonText}>Already have a farm? Log in</Text>
-                </TouchableOpacity>
-            </View>
+            </ScrollView>
         </SafeAreaView>
     );
 }
@@ -68,13 +91,15 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#F9FBF9',
-        justifyContent: 'space-between',
+    },
+    scrollContent: {
+        flexGrow: 1,
         paddingHorizontal: 24,
-        paddingVertical: 32,
+        paddingBottom: 40,
     },
     heroSection: {
         flex: 1,
-        marginTop: 40,
+        paddingTop: 40,
     },
     logoContainer: {
         flexDirection: 'row',
@@ -90,24 +115,16 @@ const styles = StyleSheet.create({
     visualContainer: {
         alignItems: 'center',
         justifyContent: 'center',
-        marginVertical: 40,
+        marginVertical: 20,
     },
-    illustration: {
-        width: width * 0.6,
-        height: width * 0.6,
-        borderRadius: (width * 0.6) / 2,
-        backgroundColor: '#E8F5E9',
-        alignItems: 'center',
-        justifyContent: 'center',
-        // Subtle shadow
+    heroLogo: {
+        width: width * 0.55,
+        height: width * 0.55,
+        // Subtle drop shadow for the logo
         shadowColor: '#2D4A22',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.1,
         shadowRadius: 20,
-        elevation: 5,
-    },
-    emoji: {
-        fontSize: 80,
     },
     textContainer: {
         marginTop: 20,
